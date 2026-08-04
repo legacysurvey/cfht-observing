@@ -1,0 +1,5 @@
+
+Example:
+./make_cfht_targets.py --ra 300 360 --dec -15 -13 --filter M4376 --non-overlapping --overwrite
+
+
