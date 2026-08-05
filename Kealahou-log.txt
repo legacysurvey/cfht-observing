@@ -1,0 +1,10 @@
+2026-08-05
+- loaded initial plans/targets-2026-08-05-{ngc,sgc}.xml, bulk-created OGs
+- wanted to change SGC RA limit, accidentally deleted NGC entries, so had to delete everything
+- re-uploaded targets: plans/targets-2026-08-05-ngc.xml (26)
+T001--T026
+- re-uploaded targets: plans/targets-2026-08-05-sgc.xml (84)
+T027--110
+- bulk-created OGs w/ OT_M4376_0.8
+OG1--OG110
+
