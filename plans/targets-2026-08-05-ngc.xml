@@ -1,0 +1,67 @@
+<?xml version = "1.0"?>
+<!DOCTYPE ASTRO SYSTEM "http://vizier.u-strasbg.fr/xml/astrores.dtd">
+<ASTRO ID="v0.8" xmlns:ASTRO="http://vizier.u-strasbg.fr/doc/astrores.htx">
+  <TABLE ID="Table">
+    <NAME>Fixed Targets</NAME>
+    <TITLE>Fixed Targets for CFHT MEGACAM</TITLE>
+    <!-- Definition of each field -->
+    <FIELD name="NAME" datatype="A" width="20">
+      <DESCRIPTION>Name of target</DESCRIPTION>
+    </FIELD>
+    <FIELD name="RA_J2000"    datatype="A" width="11" unit="h"   format="RAh:RAm:RAs">
+      <DESCRIPTION>Right ascension of target</DESCRIPTION>
+    </FIELD>
+    <FIELD name="DEC_J2000"   datatype="A" width="12" unit="deg" format="DEd:DEm:DEs">
+      <DESCRIPTION>Declination of target</DESCRIPTION>
+    </FIELD>
+    <FIELD name="MAG_AB" datatype="F" width="6">
+      <DESCRIPTION>Magnitude (AB)</DESCRIPTION>
+    </FIELD>
+    <FIELD name="PM_RA"    datatype="F" width="6">
+      <DESCRIPTION>Proper Motion RA (mas/yr)</DESCRIPTION>
+    </FIELD>
+    <FIELD name="PM_DEC"    datatype="F" width="6">
+      <DESCRIPTION>Proper Motion DEC (mas/yr)</DESCRIPTION>
+    </FIELD>
+    <FIELD name="POINT_RA"    datatype="A" width="7" unit="deg"   format="RAm:RAs">
+      <DESCRIPTION>Pointing Offset Right ascension of target</DESCRIPTION>
+    </FIELD>
+    <FIELD name="POINT_DEC"   datatype="A" width="8" unit="deg" format="DEm:DEs">
+      <DESCRIPTION>Pointing Offset Declination of target</DESCRIPTION>
+    </FIELD>
+    <!-- Data table -->
+    <DATA><CSV headlines="4" colsep="|">
+      <![CDATA[
+NAME                                   |RA_J2000   |DEC_J2000   |MAG_AB|PM_RA |PM_DEC|POINT_RA|POINT_DEC|
+                                       |hh:mm:ss.ss|+dd:mm:ss.ss|      |      |      |+mm:ss.s|+mm:ss.s|
+123456789012345678901234567890123456789|12345678901|123456789012|123456|123456|123456| 1234567|12345678|
+---------------------------------------|-----------|------------|------|------|------|--------|--------|
+DESI_M4376_254187                      |15:36:01.20|+02:17:24.00| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255784                      |15:37:16.80|+01:12:07.20| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_254043                      |15:41:08.88|+02:23:20.40| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255873                      |15:43:44.16|+01:09:32.40| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253899                      |15:45:32.88|+02:36:03.60| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255352                      |15:49:31.92|+01:26:13.20| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253755                      |15:50:06.24|+02:36:43.20| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255208                      |15:54:20.88|+01:36:21.60| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253234                      |15:56:34.80|+02:55:58.80| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255064                      |15:59:07.20|+01:43:55.20| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253700                      |16:01:26.40|+02:43:58.80| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255530                      |16:04:04.80|+01:27:03.60| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253556                      |16:05:36.00|+02:51:00.00| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255386                      |16:08:28.32|+01:23:13.20| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253412                      |16:09:50.40|+02:48:10.80| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_256229                      |16:12:52.80|+01:04:22.80| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253268                      |16:14:07.92|+02:55:12.00| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_254111                      |16:18:13.92|+02:20:20.40| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255708                      |16:19:17.28|+01:19:22.80| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253967                      |16:22:57.12|+02:25:33.60| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255564                      |16:24:16.32|+01:23:13.20| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253823                      |16:27:34.56|+02:35:49.20| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255653                      |16:30:53.52|+01:16:15.60| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253679                      |16:31:41.28|+02:37:48.00| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_255509                      |16:35:22.32|+01:29:52.80| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4376_253768                      |16:38:59.04|+02:38:52.80| 24.25|   0.0|   0.0|+00:00.0|+00:00.0|
+]]></CSV></DATA>
+  </TABLE>
+</ASTRO>
