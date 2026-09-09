@@ -5,7 +5,8 @@ The default input is ``obstatus/cfht-tiles.ecsv``.  The script writes XML in
 the same ASTRO/CSV format as ``obstatus/megacam_fixed_target.xml`` and a FITS
 binary table with the same target-list columns plus decimal-degree RA/DEC.
 Only unfinished tiles with IN_IBIS=1 and IN_HSC!=1 are selected. PROGRAM
-is unrestricted unless one or more names are supplied with --program.
+defaults to LBNL; --all-programs removes that restriction. --night builds
+a twilight-to-twilight queue in observing order (requires numpy/astropy).
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ DEFAULT_FILTER = "M4376"
 DEFAULT_MAG_AB = 24.25
 DEFAULT_MIN_SEPARATION_DEG = 1.0
 
-REQUIRED_COLUMNS = ("OBJECT", "RA", "DEC", "FILTER", "IN_IBIS", "IN_HSC", "DONE")
+REQUIRED_COLUMNS = ("OBJECT", "RA", "DEC", "FILTER", "IN_IBIS", "IN_HSC", "DONE", "PRIORITY")
 
 XML_TABLE_HEADER = [
     "NAME                                   |RA_J2000   |DEC_J2000   |MAG_AB|PM_RA |PM_DEC|POINT_RA|POINT_DEC|",
@@ -43,6 +44,8 @@ class TileTarget:
     object_name: str
     ra_deg: float
     dec_deg: float
+    lmst_design_deg: float | None = None
+    priority: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -86,9 +89,19 @@ def parse_args() -> argparse.Namespace:
         default=dt.date.today().isoformat(),
         help="Date string used in the default output prefix (default: today).",
     )
+    parser.add_argument('--night', metavar='YYYY-MM-DD',
+                        help='Schedule the night beginning on this Hawaii calendar date.')
+    parser.add_argument('--twilight', type=float, default=15.0, metavar='DEG',
+                        help='Solar depression defining night (default: 15 degrees).')
+    parser.add_argument('--exptime', type=float, default=130.0, metavar='SECONDS',
+                        help='Exposure time per night target (default: 130 seconds).')
+    parser.add_argument('--overhead', type=float, default=44.0, metavar='SECONDS',
+                        help='Overhead after each exposure (default: 44 seconds).')
+    parser.add_argument('--lmst-window', type=float, default=5.0, metavar='DEG',
+                        help='Maximum design LMST mismatch in night mode (default: 5 degrees).')
     parser.add_argument(
         "--prefix",
-        help="Output filename prefix, without extension (default: targets-$DATE).",
+        help="Output filename prefix (default: targets-$NIGHT, or targets-$DATE).",
     )
     parser.add_argument(
         "--ra",
@@ -112,7 +125,8 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_FILTER,
         help=f"Filter name to select (default: {DEFAULT_FILTER}).",
     )
-    parser.add_argument(
+    program_group = parser.add_mutually_exclusive_group()
+    program_group.add_argument(
         "--program",
         dest="programs",
         nargs="+",
@@ -122,9 +136,11 @@ def parse_args() -> argparse.Namespace:
             "Select one or more programs, e.g. --program LBNL NAOC. "
             "Matches ignore case. "
             "Use --program '' for blank labels. "
-            "Default: any program, including blank labels."
+            "Default: LBNL only."
         ),
     )
+    program_group.add_argument('--all-programs', action='store_true',
+                               help='Include every program, including blank labels.')
     parser.add_argument(
         "--mag-ab",
         type=float,
@@ -153,6 +169,8 @@ def parse_args() -> argparse.Namespace:
     )
 
     args = parser.parse_args()
+    if args.programs is None and not args.all_programs:
+        args.programs = ['LBNL']
     validate_args(parser, args)
     return args
 
@@ -169,6 +187,19 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         parser.error("--filter must not be empty")
     if not args.date:
         parser.error("--date must not be empty")
+    if args.night:
+        try:
+            dt.date.fromisoformat(args.night)
+        except ValueError:
+            parser.error('--night must be a valid YYYY-MM-DD calendar date')
+    if not math.isfinite(args.twilight) or not 0 < args.twilight < 90:
+        parser.error('--twilight must be between 0 and 90 degrees')
+    if not math.isfinite(args.exptime) or args.exptime <= 0:
+        parser.error('--exptime must be finite and positive')
+    if not math.isfinite(args.overhead) or args.overhead < 0:
+        parser.error('--overhead must be finite and nonnegative')
+    if not math.isfinite(args.lmst_window) or not 0 < args.lmst_window <= 180:
+        parser.error('--lmst-window must be in (0, 180] degrees')
 
 
 def normalize_program(program: str) -> str:
@@ -181,7 +212,8 @@ def iter_matching_targets(
     ra_range: Sequence[float],
     dec_range: Sequence[float],
     filter_name: str,
-    programs: Sequence[str] | None = None,
+    programs: Sequence[str] | None = ("LBNL",),
+    require_lmst: bool = False,
 ) -> Iterator[TileTarget]:
     """Stream targets from the CFHT ECSV file that match the observing cuts."""
 
@@ -192,7 +224,7 @@ def iter_matching_targets(
     )
     required_columns = REQUIRED_COLUMNS + (
         ("PROGRAM",) if normalized_programs is not None else ()
-    )
+    ) + (("LMST_DESIGN",) if require_lmst else ())
     columns = None
     column_index = None
 
@@ -248,7 +280,24 @@ def iter_matching_targets(
             if not in_dec_range(dec_deg, dec_range):
                 continue
 
-            yield TileTarget(object_name=object_name, ra_deg=ra_deg, dec_deg=dec_deg)
+            try:
+                priority = float(parts[column_index['PRIORITY']])
+            except ValueError as exc:
+                raise ValueError(f'Invalid PRIORITY for {object_name}') from exc
+            if not math.isfinite(priority):
+                raise ValueError(f'{object_name} needs a finite PRIORITY; '
+                                 'run update_tile_priorities.py')
+            lmst = None
+            if require_lmst:
+                try:
+                    lmst = float(parts[column_index['LMST_DESIGN']])
+                except ValueError as exc:
+                    raise ValueError(f'Invalid LMST_DESIGN for {object_name}') from exc
+                if not math.isfinite(lmst) or not 0 <= lmst < 360:
+                    raise ValueError(f'{object_name} needs a valid LMST_DESIGN; '
+                                     'run update_lmst_design.py')
+            yield TileTarget(object_name=object_name, ra_deg=ra_deg, dec_deg=dec_deg,
+                             lmst_design_deg=lmst, priority=priority)
 
     if columns is None:
         raise ValueError(f"{ecsv_path} does not contain a data header")
@@ -498,8 +547,11 @@ def output_paths(outdir: Path, prefix: str, overwrite: bool) -> tuple[Path, Path
 
 def main() -> None:
     args = parse_args()
-    prefix = args.prefix or f"targets-{args.date}"
+    prefix = args.prefix or f"targets-{args.night or args.date}"
     xml_path, fits_path = output_paths(args.outdir, prefix, args.overwrite)
+    audit_path = args.outdir / f'{prefix}.schedule.ecsv'
+    if args.night and audit_path.exists() and not args.overwrite:
+        raise FileExistsError(f'{audit_path} already exists; use --overwrite to replace it')
 
     targets = sorted(
         iter_matching_targets(
@@ -508,23 +560,48 @@ def main() -> None:
             dec_range=args.dec,
             filter_name=args.filter_name,
             programs=args.programs,
+            require_lmst=bool(args.night),
         ),
         key=lambda target: target.ra_deg,
     )
     before_non_overlap = len(targets)
 
-    if args.non_overlapping:
-        targets = trim_non_overlapping(targets, args.min_separation)
+    audit = None
+    if args.night:
+        try:
+            from night_planning import describe_night, night_bounds, schedule_night
+        except ImportError as exc:
+            raise SystemExit('Night planning requires numpy and astropy; '
+                             'install requirements.txt in your Python environment') from exc
+        night = night_bounds(args.night, args.twilight)
+        describe_night(night, args.exptime, args.overhead)
+        targets, audit = schedule_night(targets, night, args.exptime, args.overhead,
+                                        args.lmst_window, args.non_overlapping,
+                                        args.min_separation)
+    elif args.non_overlapping:
+        targets = trim_non_overlapping(
+            sorted(targets, key=lambda t: (-t.priority, t.dec_deg, t.ra_deg, t.object_name)),
+            args.min_separation)
+        targets.sort(key=lambda t: t.ra_deg)
 
     output_rows = make_output_targets(targets, args.mag_ab)
 
     args.outdir.mkdir(parents=True, exist_ok=True)
     write_xml(args.template, xml_path, output_rows)
     write_fits(fits_path, output_rows)
+    if audit is not None:
+        audit.write(audit_path, format='ascii.ecsv', overwrite=args.overwrite)
 
     print(f"Read: {args.input}")
     print(f"Selected targets: {before_non_overlap}")
-    if args.non_overlapping:
+    if audit is not None:
+        missing = len(audit) - len(output_rows)
+        print(f'Scheduled targets: {len(output_rows)} / {len(audit)} slots; '
+              f'unfilled slots: {missing}; unused time: {audit.meta["UNUSED_SECONDS"]:.3f} seconds')
+        if missing:
+            print('Night is not full: inspect the schedule for slots without eligible nearby targets.')
+        print(f'Wrote: {audit_path}')
+    elif args.non_overlapping:
         print(f"After non-overlap trim: {len(output_rows)}")
     print(f"Wrote: {xml_path}")
     print(f"Wrote: {fits_path}")

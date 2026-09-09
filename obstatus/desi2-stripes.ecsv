@@ -1,19 +1,30 @@
-# %ECSV 0.9
+# %ECSV 1.0
 # ---
 # datatype:
-# - {name: FIELD, datatype: string}
-# - {name: DEC, datatype: float64}
-# - {name: RA_MIN, datatype: float64}
-# - {name: RA_MAX, datatype: float64}
-# - {name: DEC_MIN, datatype: float64}
-# - {name: DEC_MAX, datatype: float64}
-# - {name: AREA_DEG2, datatype: int32}
+# - {name: STRIPE, datatype: string}
+# - {name: DEC_CENTER, unit: deg, datatype: float64}
+# - {name: RA_MIN, unit: deg, datatype: float64}
+# - {name: RA_MAX, unit: deg, datatype: float64}
+# - {name: DEC_MIN, unit: deg, datatype: float64}
+# - {name: DEC_MAX, unit: deg, datatype: float64}
+# - {name: AREA_DEG2, unit: deg2, datatype: int32}
 # - {name: YEAR, datatype: string}
-# - {name: INSTRUMENTS, datatype: string}
+# - {name: SURVEYS, datatype: string}
 # - {name: NOTE, datatype: string}
 # meta: !!omap
-# - {EXTNAME: NGC_SGC_FIELDS}
-FIELD DEC RA_MIN RA_MAX DEC_MIN DEC_MAX AREA_DEG2 YEAR INSTRUMENTS NOTE
+# - {SOURCE_TITLE: DESI Run 2 High-Z Imaging Plan}
+# - {SOURCE_FILE: DESI_Run_2_Imaging_Plan.pdf}
+# - {SOURCE_DRAFT_DATE: '2026-09-09'}
+# - {SOURCE_PAGE: 3}
+# - {SOURCE_TABLE: 2}
+# - {SOURCE_LABEL_NOTE: 'The table is headed Table 1 and captioned Table 2 in this draft.'}
+# - {SURVEYS_NOTE: 'The printed Surveys entries are split into YEAR, SURVEYS, and parenthetical NOTE.'}
+# - {RA_NOTE: 'SGC RA_MIN > RA_MAX denotes a range crossing 360/0 degrees.'}
+# - {AREA_NOTE: 'Declination ranges overlap adjacent stripes; areas are for a unique declination width of 2.8 degrees.'}
+# - {NGC9_NOTE: 'NGC-9 is a proposed additional stripe requiring additional imaging.'}
+# - {SGC1_NOTE: 'SGC-1 relies on HSC-Niji imaging and is outside the Rubin footprint.'}
+# schema: astropy-2.0
+STRIPE DEC_CENTER RA_MIN RA_MAX DEC_MIN DEC_MAX AREA_DEG2 YEAR SURVEYS NOTE
 NGC-1 13.28 121.01 255.71 11.375 15.125 367 Y4 POLU+IBIS ""
 NGC-2 10.48 122.33 254.40 8.875 12.375 364 Y3 POLU+IBIS ""
 NGC-3 7.68 123.69 253.00 5.875 9.375 359 Y2 POLU+IBIS ""
@@ -22,7 +33,7 @@ NGC-5 2.08 126.60 249.93 0.375 3.875 345 Y4 Niji+VST ""
 NGC-6 -0.72 128.16 228.30 -2.375 1.125 280 Y3 Niji+VST ""
 NGC-7 -3.52 129.81 225.58 -5.375 -1.625 268 Y1 POLU+IBIS ""
 NGC-8 -6.32 131.56 222.41 -8.125 -4.625 253 Y1 POLU+IBIS ""
-#NGC-9 -9.12 133.43 218.59 -10.875 -7.375 235 Y5 POLU+IBIS extended
+NGC-9 -9.12 133.43 218.59 -10.875 -7.375 235 Y5 POLU+IBIS extended
 SGC-1 3.29 315.57 44.37 1.625 5.125 248 Y4 Niji+VST "outside LSST"
 SGC-2 0.49 313.82 47.15 -1.375 2.375 261 Y3 Niji+VST ""
 SGC-3 -2.31 312.19 49.56 -4.125 -0.625 272 Y3 POLU+IBIS ""
@@ -31,4 +42,4 @@ SGC-5 -7.91 309.21 53.53 -9.625 -6.125 289 Y2 POLU+IBIS ""
 SGC-6 -10.71 307.84 55.18 -12.375 -8.875 295 Y1 POLU+IBIS ""
 SGC-7 -13.51 306.53 56.64 -15.375 -11.625 300 Y1 POLU+IBIS ""
 SGC-8 -16.31 305.29 57.93 -18.125 -14.625 303 Y4 POLU+IBIS ""
-#SGC-9 -19.11 304.10 59.06 -20.875 -17.375 304 Y5 POLU+IBIS extended
+SGC-9 -19.11 304.10 59.06 -20.875 -17.375 304 Y5 POLU+IBIS extended

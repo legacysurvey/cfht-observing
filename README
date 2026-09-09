@@ -6,14 +6,35 @@ Targets must have IN_IBIS=1, IN_HSC!=1, and DONE=0, as well as match the
 requested RA, DEC, and filter. HSC targets are excluded before non-overlap trimming.
 The input must include IN_HSC so the exclusion can always be applied.
 
-By default, any PROGRAM is selected, including an empty string. To restrict
-selection, supply one or more names (the input must then include PROGRAM):
+By default, PROGRAM=LBNL is selected. To select different programs or remove
+the restriction (including blank labels), use:
 ./make_cfht_targets.py --program LBNL
 ./make_cfht_targets.py --program LBNL NAOC
 ./make_cfht_targets.py --program ""
+./make_cfht_targets.py --all-programs
 
 Program matching ignores case. Future program names are accepted without changing the script;
 multiple --program options are combined into one list.
+
+Night planning (requires numpy and astropy; see requirements.txt):
+python update_tile_priorities.py
+python update_lmst_design.py
+python make_cfht_targets.py --night 2026-09-09
+python make_cfht_targets.py --night 2026-09-09 --twilight 18 --exptime 150 --overhead 44 --program LBNL
+
+--night is the Hawaii calendar date of the evening. Defaults are 15-degree
+twilight, 130-second exposures, and 44-second overheads. Outputs include
+evening/morning LMST bounds, FITS/XML queues in time order, and a
+targets-YYYY-MM-DD.schedule.ecsv table with every slot and any unfilled slots.
+The --lmst-window option sets the allowed LMST_DESIGN mismatch in degrees
+(default +/-5 degrees); within that window the highest PRIORITY wins,
+with lower declination breaking ties. PRIORITY is assigned from stripe
+years (Y1=10.0, Y2=9.0, Y3=8.0, Y4=7.0, Y5=6.0), taking the maximum
+where stripes overlap. All IN_IBIS=1 rows are assigned regardless of DONE
+or IN_HSC; unassigned stripe locations retain a fallback of 1.0.
+See docs/night-planning.md for the design mapping, timing model, and limitations.
+Night planning uses local Earth-orientation and leap-second files in data/iers/;
+it does not download anything and works with Astropy 4.3.1 or newer.
 
 Additional targets for NAOC time
 ./make_cfht_targets.py --ra 234 250 --dec 4 10 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-A
