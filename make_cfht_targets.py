@@ -22,7 +22,7 @@ DEFAULT_INPUT = Path("obstatus/cfht-tiles.ecsv")
 DEFAULT_TEMPLATE = Path("obstatus/megacam_fixed_target.xml")
 DEFAULT_OUTDIR = Path("plans")
 DEFAULT_FILTER = "M4376"
-DEFAULT_MAG_AB = 20.25
+DEFAULT_MAG_AB = 24.25
 DEFAULT_MIN_SEPARATION_DEG = 1.0
 
 REQUIRED_COLUMNS = ("OBJECT", "RA", "DEC", "FILTER", "IN_IBIS", "DONE")
