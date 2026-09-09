@@ -36,6 +36,15 @@ See docs/night-planning.md for the design mapping, timing model, and limitations
 Night planning uses local Earth-orientation and leap-second files in data/iers/;
 it does not download anything and works with Astropy 4.3.1 or newer.
 
+Repository layout and tests:
+The executable scripts and shared night_planning.py module live at the repository
+root. Tests live in tests/; documentation, offline reference data, tile catalogs,
+and observing plans live in docs/, data/, obstatus/, and plans/, respectively.
+Run the full test suite from the repository root (requires requirements.txt):
+python -m unittest discover -v
+To run a single test module:
+python -m unittest -v tests.test_night_planning
+
 Additional targets for NAOC time
 ./make_cfht_targets.py --ra 234 250 --dec 4 10 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-A
 ./make_cfht_targets.py --ra 307 360 --dec -12 -6 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-B

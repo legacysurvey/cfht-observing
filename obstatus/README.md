@@ -75,7 +75,7 @@ current plans (requires numpy and astropy):
 
 ```sh
 python update_tile_columns.py --hsc-stripes NGC-5 NGC-6 SGC-1 SGC-2 --extend-hsc-north
-python -m unittest -v test_update_tile_columns
+python -m unittest -v tests.test_update_tile_columns
 ```
 
 To restore the original Table 2 footprint, omit the extension switch:

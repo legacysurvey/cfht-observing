@@ -147,9 +147,8 @@ utility. That utility is never invoked by the planner. The bisection
 tolerance is numerical precision, not a claim of millisecond ephemeris
 or operational accuracy.
 
-Run the checks with:
+Tests live in `tests/`. Run the full suite from the repository root with:
 
 ```sh
-python -m unittest -v test_make_cfht_targets test_update_tile_columns \
-    test_lmst_design test_tile_priorities test_night_planning
+python -m unittest discover -v
 ```
