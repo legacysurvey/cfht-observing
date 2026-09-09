@@ -4,11 +4,14 @@
 The default input is ``obstatus/cfht-tiles.ecsv``.  The script writes XML in
 the same ASTRO/CSV format as ``obstatus/megacam_fixed_target.xml`` and a FITS
 binary table with the same target-list columns plus decimal-degree RA/DEC.
+Only unfinished tiles with IN_IBIS=1 and IN_HSC!=1 are selected. PROGRAM
+is unrestricted unless one or more names are supplied with --program.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
 import math
 import struct
@@ -25,7 +28,7 @@ DEFAULT_FILTER = "M4376"
 DEFAULT_MAG_AB = 24.25
 DEFAULT_MIN_SEPARATION_DEG = 1.0
 
-REQUIRED_COLUMNS = ("OBJECT", "RA", "DEC", "FILTER", "IN_IBIS", "DONE")
+REQUIRED_COLUMNS = ("OBJECT", "RA", "DEC", "FILTER", "IN_IBIS", "IN_HSC", "DONE")
 
 XML_TABLE_HEADER = [
     "NAME                                   |RA_J2000   |DEC_J2000   |MAG_AB|PM_RA |PM_DEC|POINT_RA|POINT_DEC|",
@@ -110,6 +113,19 @@ def parse_args() -> argparse.Namespace:
         help=f"Filter name to select (default: {DEFAULT_FILTER}).",
     )
     parser.add_argument(
+        "--program",
+        dest="programs",
+        nargs="+",
+        action="extend",
+        metavar="PROGRAM",
+        help=(
+            "Select one or more programs, e.g. --program LBNL NAOC. "
+            "Matches ignore case. "
+            "Use --program '' for blank labels. "
+            "Default: any program, including blank labels."
+        ),
+    )
+    parser.add_argument(
         "--mag-ab",
         type=float,
         default=DEFAULT_MAG_AB,
@@ -155,15 +171,28 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         parser.error("--date must not be empty")
 
 
+def normalize_program(program: str) -> str:
+    """Normalize whitespace and case for program matching."""
+    return program.strip().upper()
+
+
 def iter_matching_targets(
     ecsv_path: Path,
     ra_range: Sequence[float],
     dec_range: Sequence[float],
     filter_name: str,
+    programs: Sequence[str] | None = None,
 ) -> Iterator[TileTarget]:
     """Stream targets from the CFHT ECSV file that match the observing cuts."""
 
     normalized_filter = filter_name.upper()
+    normalized_programs = (
+        {normalize_program(program) for program in programs}
+        if programs is not None else None
+    )
+    required_columns = REQUIRED_COLUMNS + (
+        ("PROGRAM",) if normalized_programs is not None else ()
+    )
     columns = None
     column_index = None
 
@@ -173,11 +202,16 @@ def iter_matching_targets(
             if not stripped or stripped.startswith("#"):
                 continue
 
-            parts = stripped.split()
+            # ECSV uses CSV quoting for empty strings and strings with spaces.
+            try:
+                parts = next(csv.reader([stripped], delimiter=" ",
+                                        skipinitialspace=True, strict=True))
+            except csv.Error as exc:
+                raise ValueError(f"Could not parse {ecsv_path}:{line_number}: {stripped}") from exc
             if columns is None:
                 columns = parts
                 column_index = {name: index for index, name in enumerate(columns)}
-                missing = [name for name in REQUIRED_COLUMNS if name not in column_index]
+                missing = [name for name in required_columns if name not in column_index]
                 if missing:
                     raise ValueError(
                         f"{ecsv_path} is missing required column(s): {', '.join(missing)}"
@@ -196,13 +230,18 @@ def iter_matching_targets(
                 dec_deg = float(parts[column_index["DEC"]])
                 row_filter = parts[column_index["FILTER"]].upper()
                 in_ibis = int(parts[column_index["IN_IBIS"]])
+                in_hsc = int(parts[column_index["IN_HSC"]])
                 done = int(parts[column_index["DONE"]])
             except (IndexError, ValueError) as exc:
                 raise ValueError(f"Could not parse {ecsv_path}:{line_number}: {stripped}") from exc
 
             if row_filter != normalized_filter:
                 continue
-            if in_ibis != 1 or done != 0:
+            if in_ibis != 1 or in_hsc == 1 or done != 0:
+                continue
+            if (normalized_programs is not None
+                    and normalize_program(parts[column_index["PROGRAM"]])
+                    not in normalized_programs):
                 continue
             if not in_ra_range(ra_deg, ra_range):
                 continue
@@ -468,6 +507,7 @@ def main() -> None:
             ra_range=args.ra,
             dec_range=args.dec,
             filter_name=args.filter_name,
+            programs=args.programs,
         ),
         key=lambda target: target.ra_deg,
     )
