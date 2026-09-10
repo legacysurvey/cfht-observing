@@ -70,7 +70,7 @@ def main():
         exptime = st['exposure_time']['exposure_time_ms'] * 0.001
         date = mjdtodate(mjd - 1.0)
         dd = date.date()
-        yymmdd = dd.strftime('%Y-%m-%d')        
+        yymmdd = dd.strftime('%Y-%m-%d')
         target_data = exp['target_data']
         target_name = target_data['name']
         target_token = target_data['token']
@@ -124,45 +124,6 @@ def main():
               'EXPTIME from', old_et, 'to', exptime)
     tiles.write(args.tile_file, overwrite=True)
     print('Wrote updated tile file')
-        
-def junk():
-
-    # Fetch all targets for this Run ID.
-    print('Fetching targets...')
-    r = requests.get(baseurl + 'programs/' + run_id + '/targets', headers=headers)
-
-    target_name_to_token = {}
-    target_token_to_name = {}
-    for e in r.json()['entity']:
-        k = e['name']
-        v = e['token']
-        target_name_to_token[k] = v
-        target_token_to_name[v] = k
-    print(len(target_name_to_token), 'unique target names and',
-          len(target_token_to_name), 'unique tokens')
-
-    # Fetch all OGs for this Run ID.
-    print('Fetching OGs...')
-    r = requests.get(baseurl + 'programs/' + run_id + '/observing-groups', headers=headers)
-    ogs = r.json()['entity']
-    print('Found', len(ogs), 'OGs')
-
-    # Parse OGs
-    og_tokens = []
-    for og in ogs:
-        og_token = og['token']
-        components = og['single_observing_group']['observing_block']['observing_component']
-        assert(len(components) == 1)
-        comp = components[0]
-        ot_token = comp['observing_template_token']
-        target_token = comp['target_token']
-        og_tokens.append((og_token, ot_token, target_token))
-    #print(len(og_tokens), 'OGs parsed')
-    targetname_to_og = {}
-    for og_token, ot_token, target_token in og_tokens:
-        target_name = target_token_to_name[target_token]
-        targetname_to_og[target_name] = og_token
-
 
 if __name__ == '__main__':
     sys.exit(main())
