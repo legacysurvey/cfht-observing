@@ -5,7 +5,8 @@ import json
 import os
 import sys
 from astropy.table import Table
-#from astrometry.util.fits import fits_table
+
+from cfht_common import alias_run_ids, baseurl
 
 def main():
     parser = argparse.ArgumentParser()
@@ -48,8 +49,6 @@ def main():
     plan = Table.read(args.planfile)
     print('Read', len(plan), 'targets from plan file')
 
-    baseurl = 'https://api.cfht.hawaii.edu/'
-
     headers = {
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json',
@@ -58,9 +57,6 @@ def main():
     # List programs for this user
     # r = requests.get(baseurl + 'programs', headers=headers)
 
-    alias_run_ids = dict(
-        NAOC = '26BZ01'
-        LBNL = '26BZ50')
     run_id = args.run_id
     # lookup alias
     run_id = alias_run_ids.get(run_id, run_id)
