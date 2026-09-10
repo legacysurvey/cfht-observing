@@ -15,3 +15,15 @@ def datetomjd(d):
     dt = d - d0
     # dt is a timedelta object.
     return timedeltatodays(dt)
+
+def mjdtodate(mjd):
+    jd = mjdtojd(mjd)
+    return jdtodate(jd)
+
+def jdtodate(jd):
+    import datetime
+    unixtime = (jd - 2440587.5) * 86400. # in seconds
+    return datetime.datetime.utcfromtimestamp(unixtime)
+
+def mjdtojd(mjd):
+    return mjd + 2400000.5
