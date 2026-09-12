@@ -74,6 +74,8 @@ def main():
         ent = j['entity']
         label = ent['label']
         print('Added target', target_name)
+        target_token_to_name[token] = target_name
+        target_name_to_token[target_name] = token
 
     # Fetch all OTs for this Run ID
     print('Fetching OTs...')
@@ -89,7 +91,7 @@ def main():
     if not ot_name in ot_map:
         print('Error: unknown OT name "%s"' % ot_name)
         return -1
-    ot_token = ot_map[ot_name]
+    new_ot_token = ot_map[ot_name]
 
     # Fetch all OGs for this Run ID.
     print('Fetching OGs...')
@@ -98,21 +100,17 @@ def main():
     print('Found', len(ogs), 'OGs')
 
     # Parse OGs
-    og_tokens = []
+    targetname_to_og = {}
     og_priority = {}
+    og_ot = {}
     for og in ogs:
-        print('og', og)
         og_token = og['token']
         og_priority[og_token] = og['og_priority']
         components = og['single_observing_group']['observing_block']['observing_component']
         assert(len(components) == 1)
         comp = components[0]
-        ot_token = comp['observing_template_token']
+        og_ot[og_token] = comp['observing_template_token']
         target_token = comp['target_token']
-        og_tokens.append((og_token, ot_token, target_token))
-    #print(len(og_tokens), 'OGs parsed')
-    targetname_to_og = {}
-    for og_token, ot_token, target_token in og_tokens:
         target_name = target_token_to_name[target_token]
         targetname_to_og[target_name] = og_token
 
@@ -139,6 +137,10 @@ def main():
             # OG token names seem to be arbitrary in Kealahou,
             # but we may as well make them structured.
             og_token = run_id + '-' + ot_name + '-' + target_name
+            # We're making a new OG
+            ot_token = new_ot_token
+        else:
+            ot_token = og_ot[og_token]
         og_data = dict(
             token = og_token,
             og_priority = 'MEDIUM',
