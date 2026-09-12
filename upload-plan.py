@@ -23,29 +23,6 @@ def main():
         print('Kealahou API token is required, either in $KEALAHOU_TOKEN environment variable or --token argument.  Create a token at https://kealahou.cfht.hawaii.edu/account/token-manager')
         return -1
 
-    '''
-    For information about the API, see:
-
-    https://github.com/CFHT/kealahou-workshop
-    including examples like
-    https://github.com/CFHT/kealahou-workshop/blob/main/example.py
-
-    https://swagger.cfht.hawaii.edu/
-
-
-    Overall comments:
-
-    * Fixed targets have RA,Dec,mag -- we can bake in the SFD dust
-    correction to the mags.  No need for API control of these - can just use
-    the bulk upload functionality.
-
-    * OTs have filter, SNR goal, exposure time, max IQ (in r), max airmass.  We
-      expect to use a small number of these, so we will create them by hand.
-
-    * OGs have priority (eg, INACTIVE), target and OT.  This is the main object
-      that we need API control over.
-    '''
-
     plan = Table.read(args.planfile)
     print('Read', len(plan), 'targets from plan file')
 
@@ -54,12 +31,49 @@ def main():
         'Content-Type': 'application/json',
     }
 
-    # List programs for this user
-    # r = requests.get(baseurl + 'programs', headers=headers)
-
     run_id = args.run_id
     # lookup alias
     run_id = alias_run_ids.get(run_id, run_id)
+
+    # Fetch all targets for this Run ID.
+    print('Fetching targets...')
+    r = requests.get(baseurl + 'programs/' + run_id + '/targets', headers=headers)
+
+    target_name_to_token = {}
+    target_token_to_name = {}
+    for e in r.json()['entity']:
+        k = e['name']
+        v = e['token']
+        target_name_to_token[k] = v
+        target_token_to_name[v] = k
+    print(len(target_name_to_token), 'unique target names and',
+          len(target_token_to_name), 'unique tokens')
+
+    # Add any targets that don't exist yet
+    for target_name,ra,dec,target_mag in zip(plan['NAME'], plan['RA'], plan['DEC'],
+                                             plan['MAG_AB']):
+        target_name = target_name.strip()
+        token = run_id + '-FT-' + target_name
+        entity = dict(
+            token=token,
+            name=target_name,
+            fixed_target = dict(
+                coordinate=dict(ra=float(ra), dec=float(dec)), proper_motion=dict()),
+            magnitude = dict(AB=dict(value=float(target_mag))),
+            # HACK -- ignoring the pointing_offset in the target file!
+            # HACK - hard-coded pointing offset token.
+            pointing_offset=dict(token='00AZ00-PO+MEGACAM+1', name='1', offset={}))
+        req_data = dict(entity=entity)
+        url = baseurl + 'programs/' + run_id + '/targets/' + token
+        r = requests.put(url, headers=headers, data=json.dumps(req_data).encode('utf-8'))
+        j = r.json()
+        print('got', j)
+        if not j['success']:
+            print('Target creation request failed for target', target_name)
+            return -1
+        ent = j['entity']
+        label = ent['label']
+        print('Added target', target_name)
 
     # Fetch all OTs for this Run ID
     print('Fetching OTs...')
@@ -77,20 +91,6 @@ def main():
         return -1
     ot_token = ot_map[ot_name]
 
-    # Fetch all targets for this Run ID.
-    print('Fetching targets...')
-    r = requests.get(baseurl + 'programs/' + run_id + '/targets', headers=headers)
-
-    target_name_to_token = {}
-    target_token_to_name = {}
-    for e in r.json()['entity']:
-        k = e['name']
-        v = e['token']
-        target_name_to_token[k] = v
-        target_token_to_name[v] = k
-    print(len(target_name_to_token), 'unique target names and',
-          len(target_token_to_name), 'unique tokens')
-
     # Fetch all OGs for this Run ID.
     print('Fetching OGs...')
     r = requests.get(baseurl + 'programs/' + run_id + '/observing-groups', headers=headers)
@@ -99,8 +99,11 @@ def main():
 
     # Parse OGs
     og_tokens = []
+    og_priority = {}
     for og in ogs:
+        print('og', og)
         og_token = og['token']
+        og_priority[og_token] = og['og_priority']
         components = og['single_observing_group']['observing_block']['observing_component']
         assert(len(components) == 1)
         comp = components[0]
@@ -115,17 +118,27 @@ def main():
 
     # Find targets without OGs.
     new_targets = []
-    for target_name in plan['name']:
+    inactive_ogs = []
+    for target_name in plan['NAME']:
         target_name = target_name.strip()
         if not target_name in targetname_to_og:
-            new_targets.append(target_name)
+            new_targets.append((target_name, None))
+        else:
+            og_token = targetname_to_og[target_name]
+            og_prio = og_priority[og_token]
+            if og_prio == 'INACTIVE':
+                inactive_ogs.append((target_name, og_token))
     print('Need to create', len(new_targets), 'new OGs')
+    print('Need to set', len(inactive_ogs), 'from INACTIVE back to normal')
 
     # Create an OG for each target in the file that does not already have an OG.
-    for i,target_name in enumerate(new_targets):
+    # It turns out that the same code can be used to set the priority back to MEDIUM.
+    for i,(target_name,og_token) in enumerate(new_targets + inactive_ogs):
         target_token = target_name_to_token[target_name]
-        # OG token names seem to be arbitrary, but we may as well make them structured.
-        og_token = run_id + '-' + ot_name + '-' + target_name
+        if og_token is None:
+            # OG token names seem to be arbitrary in Kealahou,
+            # but we may as well make them structured.
+            og_token = run_id + '-' + ot_name + '-' + target_name
         og_data = dict(
             token = og_token,
             og_priority = 'MEDIUM',
@@ -141,13 +154,19 @@ def main():
         r = requests.put(url, headers=headers, data=json.dumps(req_data).encode('utf-8'))
         j = r.json()
         if not j['success']:
-            print('OG creation request failed for target', target_name)
+            if i < len(new_targets):
+                print('OG creation request failed for target', target_name)
+            else:
+                print('OG priority update failed for target', target_name)
             return -1
         ent = j['entity']
         label = ent['label']
-        print('Added OG', (i+1), 'of', len(new_targets),
-              'labelled', label, 'in Kealahou, for target', target_name)
-    print('Created all new OGs')
+        if i < len(new_targets):
+            print('Added OG', (i+1), 'of', len(new_targets), 'for target', target_name)
+            #'labelled', label, 'in Kealahou,
+        else:
+            print('Updated OG', (i+1-len(new_targets)), 'of', len(inactive_ogs))
+    print('Created/updated all OGs')
 
 if __name__ == '__main__':
     sys.exit(main())
