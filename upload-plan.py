@@ -7,6 +7,7 @@ import sys
 from astropy.table import Table
 
 from cfht_common import alias_run_ids, baseurl
+from kealahou_api import KealahouProgram
 
 def main():
     parser = argparse.ArgumentParser()
@@ -16,45 +17,35 @@ def main():
     parser.add_argument('planfile', help='Plan filename (FITS)')
 
     args = parser.parse_args()
-    token = os.environ.get('KEALAHOU_TOKEN', None)
-    if args.token:
-        token = args.token
-    if token is None:
-        print('Kealahou API token is required, either in $KEALAHOU_TOKEN environment variable or --token argument.  Create a token at https://kealahou.cfht.hawaii.edu/account/token-manager')
+
+    try:
+        kealahou = KealahouProgram(args.run_id, token=args.token)
+    except:
+        # missing token
         return -1
 
     plan = Table.read(args.planfile)
     print('Read', len(plan), 'targets from plan file')
 
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-    }
-
-    run_id = args.run_id
-    # lookup alias
-    run_id = alias_run_ids.get(run_id, run_id)
-
     # Fetch all targets for this Run ID.
     print('Fetching targets...')
-    r = requests.get(baseurl + 'programs/' + run_id + '/targets', headers=headers)
-
-    target_name_to_token = {}
-    target_token_to_name = {}
-    for e in r.json()['entity']:
-        k = e['name']
-        v = e['token']
-        target_name_to_token[k] = v
-        target_token_to_name[v] = k
+    targets = kealahou.fetch_targets()
+    target_name_to_token = kealahou.get_target_name_to_token_map(targets)
+    target_token_to_name = kealahou.get_target_token_to_name_map(targets)
     print(len(target_name_to_token), 'unique target names and',
-          len(target_token_to_name), 'unique tokens')
+          len(target_token_to_name), 'unique target tokens')
+    if len(target_name_to_token) != len(target_token_to_name):
+        print('Warning: target names are not unique?')
 
     # Add any targets that don't exist yet
     for target_name,ra,dec,target_mag in zip(plan['NAME'], plan['RA'], plan['DEC'],
                                              plan['MAG_AB']):
         target_name = target_name.strip()
-        token = run_id + '-FT-' + target_name
-        entity = dict(
+        # FIXME?  We could just unconditionally create/update...
+        if target_name in target_name_to_token:
+            continue
+        token = kealahou.token_for_target(target_name)
+        target_data = dict(
             token=token,
             name=target_name,
             fixed_target = dict(
@@ -63,30 +54,16 @@ def main():
             # HACK -- ignoring the pointing_offset in the target file!
             # HACK - hard-coded pointing offset token.
             pointing_offset=dict(token='00AZ00-PO+MEGACAM+1', name='1', offset={}))
-        req_data = dict(entity=entity)
-        url = baseurl + 'programs/' + run_id + '/targets/' + token
-        r = requests.put(url, headers=headers, data=json.dumps(req_data).encode('utf-8'))
-        j = r.json()
-        print('got', j)
-        if not j['success']:
-            print('Target creation request failed for target', target_name)
-            return -1
+        j = kealahou.create_or_update_target(target_data)
         ent = j['entity']
         label = ent['label']
         print('Added target', target_name)
-        target_token_to_name[token] = target_name
         target_name_to_token[target_name] = token
+        target_token_to_name[token] = target_name
 
     # Fetch all OTs for this Run ID
     print('Fetching OTs...')
-    r = requests.get(baseurl + 'programs/' + run_id + '/observing-templates', headers=headers)
-    ot_map = dict()
-    for d in r.json()['entity']:
-        v = d['token']
-        k = d['name']
-        ot_map[k] = v
-        print('  OT:', k)
-
+    ot_map = kealahou.fetch_ot_map()
     ot_name = args.ot_name
     if not ot_name in ot_map:
         print('Error: unknown OT name "%s"' % ot_name)
@@ -95,8 +72,7 @@ def main():
 
     # Fetch all OGs for this Run ID.
     print('Fetching OGs...')
-    r = requests.get(baseurl + 'programs/' + run_id + '/observing-groups', headers=headers)
-    ogs = r.json()['entity']
+    ogs = kealahou.fetch_ogs()
     print('Found', len(ogs), 'OGs')
 
     # Parse OGs
@@ -134,9 +110,7 @@ def main():
     for i,(target_name,og_token) in enumerate(new_targets + inactive_ogs):
         target_token = target_name_to_token[target_name]
         if og_token is None:
-            # OG token names seem to be arbitrary in Kealahou,
-            # but we may as well make them structured.
-            og_token = run_id + '-' + ot_name + '-' + target_name
+            og_token = kealahou.token_for_og(ot_name, target_name)
             # We're making a new OG
             ot_token = new_ot_token
         else:
@@ -151,11 +125,11 @@ def main():
                         target_token = target_token,
                         observing_template_token = ot_token,
                     )],),),)
-        req_data = dict(entity=og_data)
-        url = baseurl + 'programs/' + run_id + '/observing-groups/' + og_token
-        r = requests.put(url, headers=headers, data=json.dumps(req_data).encode('utf-8'))
-        j = r.json()
-        if not j['success']:
+        try:
+            j = kealahou.create_or_update_og(og_data)
+        except:
+            import traceback
+            traceback.print_exc()
             if i < len(new_targets):
                 print('OG creation request failed for target', target_name)
             else:
