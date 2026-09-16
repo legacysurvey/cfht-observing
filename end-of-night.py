@@ -16,7 +16,7 @@ def main():
     parser.add_argument('--token', help='Kealahou API token; default is the $KEALAHOU_TOKEN environment variable')
     parser.add_argument('--run-id', help='Run ID: either NAOC (alias for 26BZ01) or LBNL (alias for 26BZ50), or an ID', default='LBNL')
     parser.add_argument('--tile-file', default='obstatus/cfht-tiles.ecsv', help='Tile filename, default %(default)s')
-    parser.add_argument('--night', help='Night to look at, YYYY-MM-DD at sunset, default last night')
+    parser.add_argument('--night', help='Night to look at, YYYY-MM-DD at sunset (Hawaii time), default last night')
 
     args = parser.parse_args()
     token = os.environ.get('KEALAHOU_TOKEN', None)
@@ -27,7 +27,7 @@ def main():
         return -1
 
     tiles = Table.read(args.tile_file)
-    print('Read', len(tiles), 'tiles')
+    print('Read', len(tiles), 'tiles from', args.tile_file)
 
     headers = {
         'Authorization': f'Bearer {token}',
@@ -52,14 +52,20 @@ def main():
     print('MJD min:', mjd_min)
     mjd_max = mjd_min + 1.0
 
+    print('Fetching exposures from Kealahou...')
     r = requests.get(baseurl + 'programs/' + run_id + '/exposures', headers=headers)
     exposures = r.json()['exposure']
     print('Found', len(exposures), 'exposures total')
 
+    # This magic 1.0 is because the MJD is UTC, and we want the sunset date in Hawaii time.
+    MJD_DATE_OFFSET = 1.0
+
     keep_exposures = []
+    exposures_mjd_max = 0.
     for exp in exposures:
         st = exp['exposure_status']
         mjd = st['exp_date_mjd']
+        exposures_mjd_max = max(exposures_mjd_max, mjd)
         if mjd < mjd_min or mjd > mjd_max:
             continue
         expnum = int(exp['obsid'])
@@ -68,7 +74,7 @@ def main():
             print('  SNR SNAP')
             continue
         exptime = st['exposure_time']['exposure_time_ms'] * 0.001
-        date = mjdtodate(mjd - 1.0)
+        date = mjdtodate(mjd - MJD_DATE_OFFSET)
         dd = date.date()
         yymmdd = dd.strftime('%Y-%m-%d')
         target_data = exp['target_data']
@@ -81,7 +87,10 @@ def main():
         ot_token = ot_data['token']
         print('  Target "%s"' % target_name, 'OG', og_label, '= token', og_token)
         keep_exposures.append((target_name, target_token, og_token, ot_token, expnum, yymmdd, exptime))
-    print(len(keep_exposures), 'from the night')
+    print('Keeping', len(keep_exposures), 'from the night')
+    if len(keep_exposures) == 0:
+        print('Latest exposure seen: MJD %.2f, date %s' % (exposures_mjd_max, mjdtodate(exposures_mjd_max - MJD_DATE_OFFSET).strftime('%Y-%m-%d')))
+        return -1
 
     # Mark OGs as priority=INACTIVE
     for target_name, target_token, og_token, ot_token, expnum, yymmdd, exptime in keep_exposures:
