@@ -10,33 +10,25 @@ from datetime import datetime
 import numpy as np
 
 from cfht_common import alias_run_ids, baseurl, datetomjd, mjdtodate
+from kealahou_api import KealahouProgram
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--token', help='Kealahou API token; default is the $KEALAHOU_TOKEN environment variable')
-    parser.add_argument('--run-id', help='Run ID: either NAOC (alias for 26BZ01) or LBNL (alias for 26BZ50), or an ID', default='LBNL')
+    parser.add_argument('--run-id', help='Run ID: either NAOC (alias for 26BZ01) or LBNL (alias for 26BZ50), or an ID; default is LBNL', default='LBNL')
     parser.add_argument('--tile-file', default='obstatus/cfht-tiles.ecsv', help='Tile filename, default %(default)s')
     parser.add_argument('--night', help='Night to look at, YYYY-MM-DD at sunset (Hawaii time), default last night')
 
     args = parser.parse_args()
-    token = os.environ.get('KEALAHOU_TOKEN', None)
-    if args.token:
-        token = args.token
-    if token is None:
-        print('Kealahou API token is required, either in $KEALAHOU_TOKEN environment variable or --token argument.  Create a token at https://kealahou.cfht.hawaii.edu/account/token-manager')
+
+    try:
+        kealahou = KealahouProgram(args.run_id, token=args.token)
+    except:
+        # missing token
         return -1
 
     tiles = Table.read(args.tile_file)
     print('Read', len(tiles), 'tiles from', args.tile_file)
-
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-    }
-
-    run_id = args.run_id
-    # lookup alias
-    run_id = alias_run_ids.get(run_id, run_id)
 
     if args.night:
         yy,mm,dd = args.night.split('-')
@@ -53,8 +45,7 @@ def main():
     mjd_max = mjd_min + 1.0
 
     print('Fetching exposures from Kealahou...')
-    r = requests.get(baseurl + 'programs/' + run_id + '/exposures', headers=headers)
-    exposures = r.json()['exposure']
+    exposures = kealahou.fetch_exposures()
     print('Found', len(exposures), 'exposures total')
 
     # This magic 1.0 is because the MJD is UTC, and we want the sunset date in Hawaii time.
@@ -104,13 +95,7 @@ def main():
                         target_token = target_token,
                         observing_template_token = ot_token,
                     )],),),)
-        req_data = dict(entity=og_data)
-        url = baseurl + 'programs/' + run_id + '/observing-groups/' + og_token
-        r = requests.put(url, headers=headers, data=json.dumps(req_data).encode('utf-8'))
-        j = r.json()
-        if not j['success']:
-            print('OG update failed for target', target_name)
-            return -1
+        j = kealahou.create_or_update_og(og_data)
         ent = j['entity']
         label = ent['label']
         print('OG update successful for OG labelled', label, 'target', target_name)
