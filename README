@@ -5,6 +5,16 @@ Example:
 Targets must have IN_IBIS=1, IN_HSC!=1, and DONE=0, as well as match the
 requested RA, DEC, and filter. HSC targets are excluded before non-overlap trimming.
 The input must include IN_HSC so the exclusion can always be applied.
+obstatus/cfht-tiles.ecsv is the sole tile catalog; all tile updater scripts
+read and write only this ECSV file. Observing plans use FITS and XML.
+
+Target magnitudes use the input tile's EBV_MED:
+M4112: MAG_AB = DEFAULT_MAG_AB["M4112"] + 3.774 * EBV_MED
+M4376: MAG_AB = DEFAULT_MAG_AB["M4376"] + 3.576 * EBV_MED
+Both filter defaults are currently 24.25 in make_cfht_targets.py.
+--mag-ab overrides the base magnitude before adding extinction.
+This applies to ordinary and nightly plans (FITS/XML and the night schedule).
+XML magnitudes are rounded to two decimal places; FITS retains float32 precision.
 
 By default, PROGRAM=LBNL is selected. To select different programs or remove
 the restriction (including blank labels), use:
@@ -46,7 +56,11 @@ To run a single test module:
 python -m unittest -v tests.test_night_planning
 
 Additional targets for NAOC time
-./make_cfht_targets.py --ra 234 250 --dec 4 10 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-A
-./make_cfht_targets.py --ra 307 360 --dec -12 -6 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-B
-./make_cfht_targets.py --ra 0 56 --dec -15 -7 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-C
-./make_cfht_targets.py --ra 130 225 --dec -7 1 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-D
+./make_cfht_targets.py --ra 234 250 --dec 4 10 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-A --program NAOC
+./make_cfht_targets.py --ra 307 360 --dec -12 -6 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-B --program NAOC
+./make_cfht_targets.py --ra 0 56 --dec -15 -7 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-C --program NAOC
+./make_cfht_targets.py --ra 130 225 --dec -7 1 --filter M4376 --non-overlapping --overwrite --prefix targets-2026-09-08-D --program NAOC
+./make_cfht_targets.py --ra 307 311 --dec -15 -14 --filter M4112 --non-overlapping --overwrite --prefix targets-2026-09-16 --program NAOC
+
+LBNL scheduled nights
+python make_cfht_targets.py --night 2026-09-09 --program LBNL --dec -90 -12 --non-overlapping --overwrite
