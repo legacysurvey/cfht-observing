@@ -1,0 +1,44 @@
+<?xml version = "1.0"?>
+<!DOCTYPE ASTRO SYSTEM "http://vizier.u-strasbg.fr/xml/astrores.dtd">
+<ASTRO ID="v0.8" xmlns:ASTRO="http://vizier.u-strasbg.fr/doc/astrores.htx">
+  <TABLE ID="Table">
+    <NAME>Fixed Targets</NAME>
+    <TITLE>Fixed Targets for CFHT MEGACAM</TITLE>
+    <!-- Definition of each field -->
+    <FIELD name="NAME" datatype="A" width="20">
+      <DESCRIPTION>Name of target</DESCRIPTION>
+    </FIELD>
+    <FIELD name="RA_J2000"    datatype="A" width="11" unit="h"   format="RAh:RAm:RAs">
+      <DESCRIPTION>Right ascension of target</DESCRIPTION>
+    </FIELD>
+    <FIELD name="DEC_J2000"   datatype="A" width="12" unit="deg" format="DEd:DEm:DEs">
+      <DESCRIPTION>Declination of target</DESCRIPTION>
+    </FIELD>
+    <FIELD name="MAG_AB" datatype="F" width="6">
+      <DESCRIPTION>Magnitude (AB)</DESCRIPTION>
+    </FIELD>
+    <FIELD name="PM_RA"    datatype="F" width="6">
+      <DESCRIPTION>Proper Motion RA (mas/yr)</DESCRIPTION>
+    </FIELD>
+    <FIELD name="PM_DEC"    datatype="F" width="6">
+      <DESCRIPTION>Proper Motion DEC (mas/yr)</DESCRIPTION>
+    </FIELD>
+    <FIELD name="POINT_RA"    datatype="A" width="7" unit="deg"   format="RAm:RAs">
+      <DESCRIPTION>Pointing Offset Right ascension of target</DESCRIPTION>
+    </FIELD>
+    <FIELD name="POINT_DEC"   datatype="A" width="8" unit="deg" format="DEm:DEs">
+      <DESCRIPTION>Pointing Offset Declination of target</DESCRIPTION>
+    </FIELD>
+    <!-- Data table -->
+    <DATA><CSV headlines="4" colsep="|">
+      <![CDATA[
+NAME                                   |RA_J2000   |DEC_J2000   |MAG_AB|PM_RA |PM_DEC|POINT_RA|POINT_DEC|
+                                       |hh:mm:ss.ss|+dd:mm:ss.ss|      |      |      |+mm:ss.s|+mm:ss.s|
+123456789012345678901234567890123456789|12345678901|123456789012|123456|123456|123456| 1234567|12345678|
+---------------------------------------|-----------|------------|------|------|------|--------|--------|
+DESI_M4112_113263                      |20:28:22.32|-14:39:07.20| 24.46|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4112_112975                      |20:37:37.68|-14:13:40.80| 24.39|   0.0|   0.0|+00:00.0|+00:00.0|
+DESI_M4112_113441                      |20:42:09.84|-14:42:54.00| 24.41|   0.0|   0.0|+00:00.0|+00:00.0|
+]]></CSV></DATA>
+  </TABLE>
+</ASTRO>
