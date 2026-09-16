@@ -64,3 +64,12 @@ Additional targets for NAOC time
 
 LBNL scheduled nights
 python make_cfht_targets.py --night 2026-09-09 --program LBNL --dec -90 -12 --non-overlapping --overwrite
+
+
+Uploads to Kealahou:
+
+python upload-plan.py --ot-name OT_M4376_IQ0.6 --run-id NAOC plans/targets-2026-09-08-A.fits
+python upload-plan.py --ot-name OT_M4376_IQ0.6 --run-id NAOC plans/targets-2026-09-08-B.fits
+python upload-plan.py --ot-name OT_M4376_IQ0.6 --run-id NAOC plans/targets-2026-09-08-C.fits
+python upload-plan.py --ot-name OT_M4376_IQ0.6 --run-id NAOC plans/targets-2026-09-08-D.fits
+python upload-plan.py --ot-name OT_M4112_IQ0.6 --run-id NAOC plans/targets-2026-09-16.fits
