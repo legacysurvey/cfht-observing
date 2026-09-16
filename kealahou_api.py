@@ -72,6 +72,18 @@ class KealahouProgram(object):
             raise RuntimeError('Kealahou: failed to update/create Target:', target_data)
         return j
 
+    def delete_target(self, target_token):
+        url = self.baseurl + 'programs/' + self.run_id + '/targets/' + target_token
+        r = requests.delete(url, headers=self.headers)
+        j = r.json()
+        return j
+
+    def delete_og(self, og_token):
+        url = self.baseurl + 'programs/' + self.run_id + '/observing-groups/' + og_token
+        r = requests.delete(url, headers=self.headers)
+        j = r.json()
+        return j
+
     def token_for_target(self, target_name):
         # Return the token name to be used for the given target_name.
         token = self.run_id + '-FT-' + target_name

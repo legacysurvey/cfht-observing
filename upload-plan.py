@@ -6,7 +6,6 @@ import os
 import sys
 from astropy.table import Table
 
-from cfht_common import alias_run_ids, baseurl
 from kealahou_api import KealahouProgram
 
 def main():
@@ -43,6 +42,7 @@ def main():
         target_name = target_name.strip()
         # FIXME?  We could just unconditionally create/update...
         if target_name in target_name_to_token:
+            print('Target already exists:', target_name)
             continue
         token = kealahou.token_for_target(target_name)
         target_data = dict(
