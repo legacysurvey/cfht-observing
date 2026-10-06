@@ -64,6 +64,7 @@ Additional targets for NAOC time
 
 LBNL scheduled nights
 python make_cfht_targets.py --night 2026-09-09 --program LBNL --dec -90 -12 --non-overlapping --overwrite
+python make_cfht_targets.py --night 2026-10-07 --program LBNL --dec -90 -12 --overwrite
 
 
 Uploads to Kealahou:

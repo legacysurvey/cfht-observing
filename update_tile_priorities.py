@@ -12,7 +12,6 @@ import re
 import tempfile
 
 import numpy as np
-from astropy.io import fits
 from astropy.table import Column, Table
 
 
@@ -58,42 +57,21 @@ def priority_values(tiles, stripes, pad_all=True):
 def update(root=ROOT, pad_all=True):
     stripes = Table.read(root / 'obstatus/desi2-stripes.ecsv')
     ecsv_path = root / 'obstatus/cfht-tiles.ecsv'
-    fits_path = root / 'obstatus/cfht-tiles.fits'
     ecsv = Table.read(ecsv_path)
-    original_fits = Table.read(fits_path)
-    for column in ('RA', 'DEC', 'IN_IBIS'):
-        np.testing.assert_array_equal(ecsv[column], original_fits[column])
-    np.testing.assert_array_equal(np.char.strip(np.asarray(ecsv['OBJECT'], dtype=str)),
-                                  np.char.strip(np.asarray(original_fits['OBJECT'], dtype=str)))
     values = priority_values(ecsv, stripes, pad_all)
-    fits_values = priority_values(original_fits, stripes, pad_all)
-    np.testing.assert_array_equal(values, fits_values)
     ecsv['PRIORITY'] = Column(values, description=(
         'IN_IBIS=1: highest stripe priority (Y1=10, Y2=9, Y3=8, Y4=7, Y5=6); '
         'fallback 1; RA bounds from desi2-stripes.ecsv; '
         + ('all stripes' if pad_all else 'Y1 stripes') + ' use DEC_CENTER +/-2.1 deg'))
     with tempfile.TemporaryDirectory(prefix='cfht-priority-', dir=root) as tmp:
-        new_ecsv, new_fits = Path(tmp) / ecsv_path.name, Path(tmp) / fits_path.name
+        new_ecsv = Path(tmp) / ecsv_path.name
         ecsv.write(new_ecsv, format='ascii.ecsv')
-        with fits.open(fits_path) as hdus:
-            if 'PRIORITY' in hdus[1].columns.names:
-                hdus[1].data['PRIORITY'] = fits_values
-            else:
-                columns = hdus[1].columns + fits.ColDefs([
-                    fits.Column(name='PRIORITY', format='D', array=fits_values)])
-                hdus[1] = fits.BinTableHDU.from_columns(columns, header=hdus[1].header)
-            hdus[1].header['PRIMETH'] = ('max(11-YEAR)', 'IN_IBIS=1, max of overlapping stripes')
-            hdus[1].header['PRIPAD'] = ('ALL' if pad_all else 'Y1', 'DEC_CENTER +/-2.1 deg')
-            hdus.writeto(new_fits)
-        for path, original, expected in ((new_ecsv, ecsv, values),
-                                          (new_fits, original_fits, fits_values)):
-            saved = Table.read(path)
-            for column in original.colnames:
-                if column != 'PRIORITY':
-                    np.testing.assert_array_equal(saved[column], original[column])
-            np.testing.assert_array_equal(saved['PRIORITY'], expected)
+        saved = Table.read(new_ecsv)
+        for column in ecsv.colnames:
+            if column != 'PRIORITY':
+                np.testing.assert_array_equal(saved[column], ecsv[column])
+        np.testing.assert_array_equal(saved['PRIORITY'], values)
         new_ecsv.replace(ecsv_path)
-        new_fits.replace(fits_path)
     unique, counts = np.unique(values[ecsv['IN_IBIS'] == 1], return_counts=True)
     for value, count in zip(unique[::-1], counts[::-1]):
         print(f'IN_IBIS=1, PRIORITY={value:.1f}: {count} rows')

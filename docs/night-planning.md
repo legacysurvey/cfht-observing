@@ -78,10 +78,25 @@ Ordinary (non-night) plans also use priority before greedy non-overlap
 trimming, then restore RA order for output. Without trimming, ordinary
 plans include every matching target in RA order.
 
+## Target magnitudes
+
+`DEFAULT_MAG_AB` in `make_cfht_targets.py` holds an independent base magnitude
+for each filter, currently 24.25 for both M4112 and M4376. Each selected tile
+must have a finite `EBV_MED`. The magnitude written to the plan is:
+
+- M4112: `MAG_AB = DEFAULT_MAG_AB["M4112"] + 3.774 * EBV_MED`
+- M4376: `MAG_AB = DEFAULT_MAG_AB["M4376"] + 3.576 * EBV_MED`
+
+`--mag-ab` overrides the base magnitude for the selected filter; the extinction
+term is still added. These rules apply to ordinary and nightly FITS/XML plans.
+The nightly schedule also includes `MAG_AB`, with NaN for unfilled slots.
+XML values are rounded to two decimal places; FITS stores float32 values.
+Filters without a configured extinction coefficient are rejected.
+
 ## Survey-year priorities
 
 `update_tile_priorities.py` populates the existing float64 `PRIORITY`
-column in both tile files from the `YEAR` column of `desi2-stripes.ecsv`.
+column in `obstatus/cfht-tiles.ecsv` from the `YEAR` column of `desi2-stripes.ecsv`.
 Y1 through Y5 correspond to 10.0, 9.0, 8.0, 7.0, and 6.0. All `IN_IBIS=1`
 rows receive a priority, including completed targets and HSC areas;
 planning still independently applies its normal completion and HSC cuts.
@@ -100,12 +115,10 @@ does not change any other tile columns, including `LMST_DESIGN`.
 
 ## Rebalancing LMST_DESIGN
 
-`update_lmst_design.py` updates both `obstatus/cfht-tiles.ecsv` and
-`obstatus/cfht-tiles.fits`. It uses remaining rows with `IN_IBIS=1`,
+`update_lmst_design.py` updates `obstatus/cfht-tiles.ecsv`, the sole tile
+catalog. It uses remaining rows with `IN_IBIS=1`,
 `IN_HSC=0`, and `DONE=0`, independently in each filter, across all programs.
-The ECSV table is authoritative for this calculation because it includes
-five completion updates not yet present in FITS. Both formats get identical
-designs; all pre-existing column values are preserved independently.
+All columns other than `LMST_DESIGN` are preserved.
 
 For each filter:
 

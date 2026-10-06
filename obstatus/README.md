@@ -9,7 +9,7 @@ notes, with angular units and source details in the ECSV header. These are
 the document's original bounds, before any CFHT overlap margins or
 temporary HSC extensions. This file is also used by the footprint updater.
 
-`cfht-tiles.ecsv` and `cfht-tiles.fits` include:
+`cfht-tiles.ecsv` is the sole tile catalog. It includes:
 
 - `PRIORITY`: float64 survey-year priority from `desi2-stripes.ecsv`:
   Y1=10.0, Y2=9.0, Y3=8.0, Y4=7.0, and Y5=6.0. Every row with
@@ -31,10 +31,8 @@ temporary HSC extensions. This file is also used by the footprint updater.
   rows, independently of `PROGRAM`; `IN_IBIS` sets the SGC extension limit.
 - `LMST_DESIGN`: float64 local mean sidereal time in degrees, in [0, 360),
   balanced uniformly for remaining eligible rows separately in each filter.
-  Rows outside `IN_IBIS=1, IN_HSC=0, DONE=0` have NaN. The ECSV table is
-  the source for eligibility, including its more recent `DONE` values;
-  identical design values are written to FITS without changing its other
-  columns. All programs participate in this mapping. Recompute with
+  Rows outside `IN_IBIS=1, IN_HSC=0, DONE=0` have NaN.
+  All programs participate in this mapping. Recompute with
   `python update_lmst_design.py` as completion or footprint flags change.
   See [night planning](../docs/night-planning.md) for the algorithm.
 
@@ -84,7 +82,6 @@ To restore the original Table 2 footprint, omit the extension switch:
 python update_tile_columns.py --hsc-stripes NGC-5 NGC-6 SGC-1 SGC-2
 ```
 
-The updater validates staged files before replacing the originals and
-preserves each file's existing column values. In particular, five `DONE`
-values already differed between ECSV and FITS before this update; those
-differences are preserved.
+The tile updaters read and write only `cfht-tiles.ecsv`. Each validates a
+staged catalog before replacing the original and preserves all columns
+other than those it updates. Observing plans still use FITS and XML.

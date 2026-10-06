@@ -33,6 +33,9 @@ class SelectionTests(unittest.TestCase):
         self.columns.append('PRIORITY')
         for row in self.rows:
             row.append(10.0 if row[0] == 'lbl' else 9.0)
+        self.columns.append('EBV_MED')
+        for i, row in enumerate(self.rows):
+            row.append(i * 0.01)
         self.write_table()
 
     def write_table(self, omit=None):
@@ -41,7 +44,7 @@ class SelectionTests(unittest.TestCase):
             handle.write('# %ECSV 1.0\n# ---\n# datatype:\n')
             for i in indices:
                 dtype = ('string' if self.columns[i] in ('OBJECT', 'FILTER', 'PROGRAM')
-                         else 'float64' if self.columns[i] in ('RA', 'DEC', 'PRIORITY', 'LMST_DESIGN') else 'int16')
+                         else 'float64' if self.columns[i] in ('RA', 'DEC', 'PRIORITY', 'LMST_DESIGN', 'EBV_MED') else 'int16')
                 handle.write(f'# - {{name: {self.columns[i]}, datatype: {dtype}}}\n')
             writer = csv.writer(handle, delimiter=' ', quoting=csv.QUOTE_NONNUMERIC)
             writer.writerow([self.columns[i] for i in indices])
@@ -113,7 +116,7 @@ class SelectionTests(unittest.TestCase):
             self.targets()
 
     def test_nonfinite_priority_rejected(self):
-        self.rows[1][-1] = float('nan')
+        self.rows[1][self.columns.index('PRIORITY')] = float('nan')
         self.write_table()
         with self.assertRaisesRegex(ValueError, 'finite PRIORITY'):
             self.targets()
@@ -129,6 +132,18 @@ class SelectionTests(unittest.TestCase):
             main()
         rows = write.call_args[0][1]
         self.assertEqual([row.name for row in rows], ['lbl'])
+
+    def test_extinction_read_and_validated(self):
+        self.assertEqual(self.targets()[0].ebv_med, 0.01)
+        self.assertEqual(self.targets()[0].filter_name, 'M4376')
+        for bad in ('not-a-number', float('nan'), float('inf')):
+            self.rows[1][self.columns.index('EBV_MED')] = bad
+            self.write_table()
+            with self.assertRaisesRegex(ValueError, 'EBV_MED'):
+                self.targets()
+        self.write_table(omit='EBV_MED')
+        with self.assertRaisesRegex(ValueError, 'missing required column.*EBV_MED'):
+            self.targets()
 
 
 if __name__ == '__main__':

@@ -26,10 +26,11 @@ DEFAULT_INPUT = Path("obstatus/cfht-tiles.ecsv")
 DEFAULT_TEMPLATE = Path("obstatus/megacam_fixed_target.xml")
 DEFAULT_OUTDIR = Path("plans")
 DEFAULT_FILTER = "M4376"
-DEFAULT_MAG_AB = 24.25
+DEFAULT_MAG_AB = {"M4112": 24.25, "M4376": 24.25}
+EXTINCTION_COEFFICIENT = {"M4112": 3.774, "M4376": 3.576}
 DEFAULT_MIN_SEPARATION_DEG = 1.0
 
-REQUIRED_COLUMNS = ("OBJECT", "RA", "DEC", "FILTER", "IN_IBIS", "IN_HSC", "DONE", "PRIORITY")
+REQUIRED_COLUMNS = ("OBJECT", "RA", "DEC", "FILTER", "IN_IBIS", "IN_HSC", "DONE", "PRIORITY", "EBV_MED")
 
 XML_TABLE_HEADER = [
     "NAME                                   |RA_J2000   |DEC_J2000   |MAG_AB|PM_RA |PM_DEC|POINT_RA|POINT_DEC|",
@@ -46,6 +47,8 @@ class TileTarget:
     dec_deg: float
     lmst_design_deg: float | None = None
     priority: float = 1.0
+    filter_name: str = DEFAULT_FILTER
+    ebv_med: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -144,8 +147,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mag-ab",
         type=float,
-        default=DEFAULT_MAG_AB,
-        help=f"MAG_AB value to write for every target (default: {DEFAULT_MAG_AB}).",
+        default=None,
+        help=("Base AB magnitude before adding the filter extinction coefficient * EBV_MED "
+              f"(defaults by filter: {DEFAULT_MAG_AB})."),
     )
     parser.add_argument(
         "--non-overlapping",
@@ -185,6 +189,12 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         parser.error("--min-separation must be positive")
     if not args.filter_name:
         parser.error("--filter must not be empty")
+    args.filter_name = args.filter_name.upper()
+    if args.filter_name not in EXTINCTION_COEFFICIENT:
+        parser.error('--filter needs a configured extinction coefficient: '
+                     + ', '.join(EXTINCTION_COEFFICIENT))
+    if args.mag_ab is not None and not math.isfinite(args.mag_ab):
+        parser.error('--mag-ab must be finite')
     if not args.date:
         parser.error("--date must not be empty")
     if args.night:
@@ -287,6 +297,12 @@ def iter_matching_targets(
             if not math.isfinite(priority):
                 raise ValueError(f'{object_name} needs a finite PRIORITY; '
                                  'run update_tile_priorities.py')
+            try:
+                ebv_med = float(parts[column_index['EBV_MED']])
+            except ValueError as exc:
+                raise ValueError(f'Invalid EBV_MED for {object_name}') from exc
+            if not math.isfinite(ebv_med):
+                raise ValueError(f'{object_name} needs a finite EBV_MED')
             lmst = None
             if require_lmst:
                 try:
@@ -297,7 +313,8 @@ def iter_matching_targets(
                     raise ValueError(f'{object_name} needs a valid LMST_DESIGN; '
                                      'run update_lmst_design.py')
             yield TileTarget(object_name=object_name, ra_deg=ra_deg, dec_deg=dec_deg,
-                             lmst_design_deg=lmst, priority=priority)
+                             lmst_design_deg=lmst, priority=priority,
+                             filter_name=row_filter, ebv_med=ebv_med)
 
     if columns is None:
         raise ValueError(f"{ecsv_path} does not contain a data header")
@@ -360,7 +377,18 @@ def angular_ra_separation(ra1_deg: float, ra2_deg: float) -> float:
     return abs((ra1_deg - ra2_deg + 180.0) % 360.0 - 180.0)
 
 
-def make_output_targets(targets: Iterable[TileTarget], mag_ab: float) -> list[OutputTarget]:
+def target_magnitude(target: TileTarget, mag_ab: float | None = None) -> float:
+    """Add Galactic extinction to the filter's base magnitude (or its override)."""
+    filter_name = target.filter_name.upper()
+    if filter_name not in EXTINCTION_COEFFICIENT:
+        raise ValueError(f'No extinction coefficient configured for filter {filter_name}')
+    base = DEFAULT_MAG_AB[filter_name] if mag_ab is None else mag_ab
+    if not math.isfinite(base) or not math.isfinite(target.ebv_med):
+        raise ValueError(f'{target.object_name} needs finite base magnitude and EBV_MED')
+    return base + EXTINCTION_COEFFICIENT[filter_name] * target.ebv_med
+
+
+def make_output_targets(targets: Iterable[TileTarget], mag_ab: float | None = None) -> list[OutputTarget]:
     return [
         OutputTarget(
             name=target.object_name,
@@ -368,7 +396,7 @@ def make_output_targets(targets: Iterable[TileTarget], mag_ab: float) -> list[Ou
             dec_j2000=format_dec(target.dec_deg),
             ra_deg=target.ra_deg,
             dec_deg=target.dec_deg,
-            mag_ab=mag_ab,
+            mag_ab=target_magnitude(target, mag_ab),
         )
         for target in targets
     ]
@@ -585,6 +613,11 @@ def main() -> None:
         targets.sort(key=lambda t: t.ra_deg)
 
     output_rows = make_output_targets(targets, args.mag_ab)
+    if audit is not None:
+        magnitudes = {row.name: row.mag_ab for row in output_rows}
+        audit['MAG_AB'] = [magnitudes.get(name, float('nan')) for name in audit['OBJECT']]
+        audit['MAG_AB'].unit = 'mag'
+        audit['MAG_AB'].description = 'Base AB magnitude plus filter coefficient * EBV_MED'
 
     args.outdir.mkdir(parents=True, exist_ok=True)
     write_xml(args.template, xml_path, output_rows)

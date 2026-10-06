@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add PROGRAM and IN_HSC to the CFHT ECSV and FITS tile tables.
+"""Add PROGRAM and IN_HSC to the CFHT ECSV tile catalog.
 
 Requires numpy and astropy. Survey assignments must be supplied explicitly;
 stripe coordinates come from obstatus/desi2-stripes.ecsv.
@@ -13,7 +13,6 @@ import tempfile
 import xml.etree.ElementTree as ET
 
 import numpy as np
-from astropy.io import fits
 from astropy.table import Table
 
 
@@ -103,46 +102,24 @@ def update(root: Path, fields: list[str], extend_hsc_north=False) -> None:
     stripes = stripes[np.isin(stripes['FIELD'], fields)]
     names = planned_objects(root / 'plans')
     ecsv_path = root / 'obstatus/cfht-tiles.ecsv'
-    fits_path = root / 'obstatus/cfht-tiles.fits'
     ecsv = Table.read(ecsv_path)
     original_columns = [c for c in ecsv.colnames if c not in ('PROGRAM', 'IN_HSC')]
     program, in_hsc = labels(ecsv, names, stripes, extend_hsc_north)
     ecsv['PROGRAM'] = program
     ecsv['IN_HSC'] = in_hsc
 
-    # Stage and validate both products before replacing either original.
+    # Stage and validate the catalog before replacing the original.
     with tempfile.TemporaryDirectory(prefix='cfht-columns-', dir=root) as temp:
         staged_ecsv = Path(temp) / ecsv_path.name
-        staged_fits = Path(temp) / fits_path.name
         ecsv.write(staged_ecsv, format='ascii.ecsv')
-        original_fits = Table.read(fits_path)
-        with fits.open(fits_path) as hdus:
-            fits_program, fits_hsc = labels(original_fits, names, stripes,
-                                           extend_hsc_north)
-            np.testing.assert_array_equal(ecsv['OBJECT'], original_fits['OBJECT'])
-            np.testing.assert_array_equal(program, fits_program)
-            np.testing.assert_array_equal(in_hsc, fits_hsc)
-            retained = [c for c in hdus[1].columns
-                        if c.name not in ('PROGRAM', 'IN_HSC')]
-            columns = fits.ColDefs(retained) + fits.ColDefs([
-                fits.Column(name='PROGRAM', format='4A', array=fits_program),
-                fits.Column(name='IN_HSC', format='I', array=fits_hsc),
-            ])
-            hdus[1] = fits.BinTableHDU.from_columns(columns, header=hdus[1].header)
-            hdus.writeto(staged_fits)
-
         saved_ecsv = Table.read(staged_ecsv)
-        saved_fits = Table.read(staged_fits)
         for column in original_columns:
             np.testing.assert_array_equal(saved_ecsv[column], ecsv[column])
-            np.testing.assert_array_equal(saved_fits[column], original_fits[column])
-        for saved in (saved_ecsv, saved_fits):
-            np.testing.assert_array_equal(saved['PROGRAM'].filled('')
-                                          if hasattr(saved['PROGRAM'], 'filled')
-                                          else saved['PROGRAM'], program)
-            np.testing.assert_array_equal(saved['IN_HSC'], in_hsc)
+        np.testing.assert_array_equal(saved_ecsv['PROGRAM'].filled('')
+                                      if hasattr(saved_ecsv['PROGRAM'], 'filled')
+                                      else saved_ecsv['PROGRAM'], program)
+        np.testing.assert_array_equal(saved_ecsv['IN_HSC'], in_hsc)
         staged_ecsv.replace(ecsv_path)
-        staged_fits.replace(fits_path)
     for value in ('NAOC', 'LBNL', ''):
         print(f'PROGRAM={value or "(blank)"}: {np.count_nonzero(program == value)}')
     print(f'IN_HSC=1: {np.count_nonzero(in_hsc)}')

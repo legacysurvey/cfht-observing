@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rebalance LMST_DESIGN in both tile tables using remaining ECSV targets.
+"""Rebalance LMST_DESIGN in the ECSV tile catalog using remaining targets.
 
 Requires numpy and astropy. Angles are degrees. Re-run as DONE flags or
 footprints change; PROGRAM labels do not affect the design distribution.
@@ -10,7 +10,6 @@ from pathlib import Path
 import tempfile
 
 import numpy as np
-from astropy.io import fits
 from astropy.table import Column, Table
 
 
@@ -62,11 +61,7 @@ def design_values(table):
 
 def update(root=ROOT):
     ecsv_path = root / 'obstatus/cfht-tiles.ecsv'
-    fits_path = root / 'obstatus/cfht-tiles.fits'
     ecsv = Table.read(ecsv_path)
-    original_fits = Table.read(fits_path)
-    for name in ('OBJECT', 'RA', 'DEC', 'FILTER', 'IN_IBIS', 'IN_HSC'):
-        np.testing.assert_array_equal(ecsv[name], original_fits[name])
     values = design_values(ecsv)
     original_columns = [c for c in ecsv.colnames if c != 'LMST_DESIGN']
     ecsv['LMST_DESIGN'] = Column(values, unit='deg', description=(
@@ -74,23 +69,13 @@ def update(root=ROOT):
         'remaining IN_IBIS=1, IN_HSC=0, DONE=0 rows in ECSV; otherwise NaN'))
 
     with tempfile.TemporaryDirectory(prefix='cfht-lmst-', dir=root) as tmp:
-        new_ecsv, new_fits = Path(tmp) / ecsv_path.name, Path(tmp) / fits_path.name
+        new_ecsv = Path(tmp) / ecsv_path.name
         ecsv.write(new_ecsv, format='ascii.ecsv')
-        with fits.open(fits_path) as hdus:
-            columns = fits.ColDefs([c for c in hdus[1].columns if c.name != 'LMST_DESIGN'])
-            columns += fits.ColDefs([fits.Column(name='LMST_DESIGN', format='D',
-                                                  unit='deg', array=values)])
-            hdus[1] = fits.BinTableHDU.from_columns(columns, header=hdus[1].header)
-            hdus[1].header['LMDMETH'] = ('RA rank, mean HA=0', 'Independent per filter')
-            hdus[1].header['LMDREF'] = ('ECSV', 'Eligibility and DONE source')
-            hdus.writeto(new_fits)
-        for path, original in ((new_ecsv, ecsv), (new_fits, original_fits)):
-            saved = Table.read(path)
-            for name in original_columns:
-                np.testing.assert_array_equal(saved[name], original[name])
-            np.testing.assert_array_equal(saved['LMST_DESIGN'], values)
+        saved = Table.read(new_ecsv)
+        for name in original_columns:
+            np.testing.assert_array_equal(saved[name], ecsv[name])
+        np.testing.assert_array_equal(saved['LMST_DESIGN'], values)
         new_ecsv.replace(ecsv_path)
-        new_fits.replace(fits_path)
     for band in np.unique(ecsv['FILTER']):
         selected = (ecsv['FILTER'] == band) & np.isfinite(values)
         ha = (values[selected] - ecsv['RA'][selected] + 180) % 360 - 180
