@@ -13,7 +13,7 @@ import numpy as np
 
 
 # Plot limits requested for a "looking up" view: RA decreases to the right.
-PLOT_RA_LEFT = 270.0
+PLOT_RA_LEFT = 300.0
 PLOT_RA_RIGHT = -60.0
 PLOT_DEC_RANGE = (-20.0, 20.0)
 
@@ -70,14 +70,27 @@ def read_tile_positions(ecsv_path: Path) -> dict[str, np.ndarray]:
 
 
 def plot_ra(ra_deg):
-    """Map RA so that the plotted x range runs continuously from 270 down to -60."""
+    """Map RA so that the plotted x range runs continuously from 300 down to -60."""
     ra = np.asarray(ra_deg, dtype=float) % 360.0
     return np.where(ra > PLOT_RA_LEFT, ra - 360.0, ra)
 
 
+BODY_STYLE = {
+    'moon': dict(marker='o', color='0.3', size=55, label='Moon'),
+    'venus': dict(marker='*', color='gold', size=110, label='Venus'),
+    'mars': dict(marker='*', color='orangered', size=90, label='Mars'),
+    'saturn': dict(marker='*', color='tan', size=90, label='Saturn'),
+    'uranus': dict(marker='*', color='turquoise', size=70, label='Uranus'),
+}
+
+
 def plot_night(path: Path, audit, tiles: dict[str, np.ndarray], targets,
-               filter_name: str) -> None:
-    """Draw tonight's targets over the tile footprint in a rectilinear RA/DEC view."""
+               filter_name: str, bodies: dict | None = None) -> None:
+    """Draw tonight's targets over the tile footprint in a rectilinear RA/DEC view.
+
+    ``bodies`` maps body name to (ra_deg, dec_deg) arrays sampled through the
+    night, as returned by night_planning.bright_body_positions.
+    """
     try:
         import matplotlib
         matplotlib.use('pdf')
@@ -102,19 +115,17 @@ def plot_night(path: Path, audit, tiles: dict[str, np.ndarray], targets,
             ax.scatter(x_all[mask], tiles['DEC'][mask], s=4, c=color, marker='s',
                        linewidths=0, label=f'{label} ({int(mask.sum())})', rasterized=True)
 
-    # Tonight's targets, colored by UT hours since evening twilight.
+    # Tonight's targets, colored by the requested MAG_AB of each exposure.
     scheduled = audit[audit['STATUS'] == 'SCHEDULED']
     position = {t.object_name: (t.ra_deg, t.dec_deg) for t in targets}
     if len(scheduled):
         ra = np.asarray([position[name][0] for name in scheduled['OBJECT']])
         dec = np.asarray([position[name][1] for name in scheduled['OBJECT']])
-        hours = (np.asarray(scheduled['SLOT'], dtype=float) - 1) * (
-            meta['EXPTIME'] + meta['OVERHEAD']) / 3600.0
-        points = ax.scatter(plot_ra(ra), dec, s=22, c=hours, cmap='viridis',
-                            edgecolors='black', linewidths=0.3, zorder=3,
+        points = ax.scatter(plot_ra(ra), dec, s=22, c=np.asarray(scheduled['MAG_AB']),
+                            cmap='viridis', edgecolors='black', linewidths=0.3, zorder=3,
                             label=f'Tonight ({len(scheduled)} exposures)')
         bar = fig.colorbar(points, ax=ax, pad=0.01, fraction=0.03, shrink=0.8)
-        bar.set_label('Hours after evening twilight')
+        bar.set_label('Requested MAG_AB')
 
     for lmst, label in ((meta['LMST_START'], 'meridian at evening twilight'),
                         (meta['LMST_END'], 'meridian at morning twilight')):
@@ -129,6 +140,43 @@ def plot_night(path: Path, audit, tiles: dict[str, np.ndarray], targets,
                 f'{label}{"" if on_plot else " (off plot)"}\nLMST {lmst_hms(lmst)}',
                 color='tab:red', fontsize=7, va='top', ha='right' if near_right else 'left')
 
+    # Planets are marked at the midpoint of the night (the sampled tracks are
+    # centered on it). The Moon moves several degrees per night, so it is
+    # drawn at evening and morning twilight with an arrow showing its motion.
+    for body, (ra, dec) in (bodies or {}).items():
+        style = BODY_STYLE.get(body, dict(marker='*', color='gray', size=70, label=body))
+        x, y = plot_ra(ra), np.asarray(dec, dtype=float)
+        middle = len(x) // 2
+        in_view = ((PLOT_RA_RIGHT <= x) & (x <= PLOT_RA_LEFT)
+                   & (PLOT_DEC_RANGE[0] <= y) & (y <= PLOT_DEC_RANGE[1]))
+        if body == 'moon':
+            if not (in_view[0] or in_view[-1]):
+                continue
+            # Break the track where it wraps across the plot edge.
+            segments = np.split(np.arange(len(x)), np.flatnonzero(np.abs(np.diff(x)) > 180) + 1)
+            for segment in segments:
+                ax.plot(x[segment], y[segment], color=style['color'], linewidth=1.2, zorder=4)
+            ax.scatter(x[0], y[0], marker='o', s=style['size'], facecolors='white',
+                       edgecolors=style['color'], linewidths=1.2, zorder=5)
+            ax.scatter(x[-1], y[-1], marker='o', s=style['size'], color=style['color'],
+                       edgecolors='black', linewidths=0.5, zorder=5)
+            if abs(x[-1] - x[-2]) < 180:
+                ax.annotate('', xy=(x[-1], y[-1]), xytext=(x[-2], y[-2]), zorder=5,
+                            arrowprops=dict(arrowstyle='-|>', color=style['color'], lw=1.2,
+                                            shrinkA=0, shrinkB=6))
+            label_x, label_y = (x[-1], y[-1]) if in_view[-1] else (x[0], y[0])
+            label = 'Moon (evening \u2192 morning)'
+        else:
+            if not in_view[middle]:
+                continue
+            ax.scatter(x[middle], y[middle], marker=style['marker'], s=style['size'],
+                       color=style['color'], edgecolors='black', linewidths=0.5, zorder=5)
+            label_x, label_y = x[middle], y[middle]
+            label = style['label']
+        near_top = label_y > PLOT_DEC_RANGE[1] - 3.0
+        ax.annotate(label, (label_x, label_y), xytext=(6, -10 if near_top else 5),
+                    textcoords='offset points', fontsize=8, zorder=5)
+
     ax.set_xlim(PLOT_RA_LEFT, PLOT_RA_RIGHT)
     ax.set_ylim(*PLOT_DEC_RANGE)
     ticks = np.arange(PLOT_RA_LEFT, PLOT_RA_RIGHT - 1, -30.0)
@@ -140,7 +188,8 @@ def plot_night(path: Path, audit, tiles: dict[str, np.ndarray], targets,
     ax.grid(True, linewidth=0.3, alpha=0.5)
     ax.set_title(f'CFHT {filter_name.upper()} plan for the night of {meta["NIGHT"]} (HST): '
                  f'{meta["SCHEDULED"]} of {meta["CAPACITY"]} slots, '
-                 f'UT {meta["START_UTC"][11:16]} to {meta["END_UTC"][11:16]}', fontsize=10)
+                 f'UT {meta["START_UTC"][11:16]} to {meta["END_UTC"][11:16]}; '
+                 'planets at mid-night', fontsize=10)
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.38), ncol=4, fontsize=7,
               markerscale=2, frameon=False)
     fig.savefig(path, format='pdf', dpi=200, bbox_inches='tight')

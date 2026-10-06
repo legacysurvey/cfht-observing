@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 from astropy import units as u
-from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_body, get_sun
 from astropy.table import Table
 from astropy.time import Time
 from astropy.utils import iers
@@ -21,6 +21,9 @@ CFHT = EarthLocation.from_geodetic(-(155 + 28 / 60 + 18 / 3600) * u.deg,
                                  4204 * u.m)
 HST = dt.timezone(dt.timedelta(hours=-10), name='HST')
 IERS_DIRECTORY = Path(__file__).resolve().parent / 'data' / 'iers'
+# Bright planets whose fields the scheduler avoids; the Moon is only plotted.
+AVOIDED_PLANETS = ('venus', 'mars', 'saturn', 'uranus')
+BRIGHT_BODIES = ('moon',) + AVOIDED_PLANETS
 
 
 @lru_cache(maxsize=1)
@@ -119,6 +122,50 @@ def night_bounds(date, twilight=15.0):
         return Night(date, twilight, start, end,
                      float(start.sidereal_time('mean', longitude=CFHT.lon).deg),
                      float(end.sidereal_time('mean', longitude=CFHT.lon).deg))
+
+
+def bright_body_positions(night, steps=25):
+    """RA/DEC (deg) of the Moon and bright planets through the night.
+
+    Returns {body: (ra_array, dec_array)} sampled at ``steps`` evenly spaced
+    times from evening to morning twilight, as seen from CFHT (topocentric,
+    so lunar parallax is included). Coordinates are GCRS, whose axes match
+    ICRS/J2000 to within aberration (about 20 arcsec), which is ample for
+    plotting and field avoidance. The directions must not be converted to
+    barycentric ICRS, which would give meaningless results for solar-system
+    bodies. Uses Astropy's built-in ephemeris.
+    """
+    with offline_iers():
+        times = night.start + np.linspace(0.0, night.seconds, steps) * u.s
+        positions = {}
+        for body in BRIGHT_BODIES:
+            coord = get_body(body, times, location=CFHT)
+            positions[body] = (np.asarray(coord.ra.deg), np.asarray(coord.dec.deg))
+    return positions
+
+
+def exclude_near_planets(targets, positions, radius=1.0):
+    """Split targets into (kept, excluded) by proximity to any avoided planet.
+
+    A target is excluded if its center comes within ``radius`` degrees of a
+    planet at any sampled time during the night; ``radius`` of 0 disables.
+    Returns the excluded targets as a {object_name: planet} mapping.
+    """
+    if not math.isfinite(radius) or radius < 0:
+        raise ValueError('Planet avoidance radius must be finite and nonnegative')
+    if radius == 0 or not targets:
+        return list(targets), {}
+    coords = SkyCoord(ra=[t.ra_deg for t in targets] * u.deg,
+                      dec=[t.dec_deg for t in targets] * u.deg)
+    excluded = {}
+    for planet in AVOIDED_PLANETS:
+        ra, dec = positions[planet]
+        planet_coords = SkyCoord(ra=ra * u.deg, dec=dec * u.deg)
+        separation = coords[:, None].separation(planet_coords[None, :]).deg.min(axis=1)
+        for index in np.flatnonzero(separation < radius):
+            excluded.setdefault(targets[index].object_name, planet)
+    kept = [t for t in targets if t.object_name not in excluded]
+    return kept, excluded
 
 
 def slot_count(seconds, exptime=130.0, overhead=44.0):

@@ -102,6 +102,9 @@ def parse_args() -> argparse.Namespace:
                         help='Overhead after each exposure (default: 44 seconds).')
     parser.add_argument('--lmst-window', type=float, default=5.0, metavar='DEG',
                         help='Maximum design LMST mismatch in night mode (default: 5 degrees).')
+    parser.add_argument('--planet-avoid', type=float, default=1.0, metavar='DEG',
+                        help='In night mode, skip tiles whose centers pass within this many degrees '
+                             'of Venus, Mars, Saturn, or Uranus (default: 1 degree; 0 disables).')
     parser.add_argument(
         "--prefix",
         help="Output filename prefix (default: targets-$NIGHT, or targets-$DATE).",
@@ -210,6 +213,8 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         parser.error('--overhead must be finite and nonnegative')
     if not math.isfinite(args.lmst_window) or not 0 < args.lmst_window <= 180:
         parser.error('--lmst-window must be in (0, 180] degrees')
+    if not math.isfinite(args.planet_avoid) or args.planet_avoid < 0:
+        parser.error('--planet-avoid must be finite and nonnegative')
 
 
 def normalize_program(program: str) -> str:
@@ -600,17 +605,25 @@ def main() -> None:
     before_non_overlap = len(targets)
 
     audit = None
+    bodies = None
     if args.night:
         try:
-            from night_planning import describe_night, night_bounds, schedule_night
+            from night_planning import (bright_body_positions, describe_night, exclude_near_planets,
+                                        night_bounds, schedule_night)
         except ImportError as exc:
             raise SystemExit('Night planning requires numpy and astropy; '
                              'install requirements.txt in your Python environment') from exc
         night = night_bounds(args.night, args.twilight)
         describe_night(night, args.exptime, args.overhead)
+        bodies = bright_body_positions(night)
+        targets, near_planets = exclude_near_planets(targets, bodies, args.planet_avoid)
+        for name, planet in sorted(near_planets.items()):
+            print(f'Skipping {name}: within {args.planet_avoid:g} deg of {planet.capitalize()}')
         targets, audit = schedule_night(targets, night, args.exptime, args.overhead,
                                         args.lmst_window, args.non_overlapping,
                                         args.min_separation)
+        audit.meta['PLANET_AVOID_DEG'] = args.planet_avoid
+        audit.meta['PLANET_EXCLUDED'] = sorted(near_planets)
     elif args.non_overlapping:
         targets = trim_non_overlapping(
             sorted(targets, key=lambda t: (-t.priority, t.dec_deg, t.ra_deg, t.object_name)),
@@ -631,7 +644,8 @@ def main() -> None:
         from night_outputs import plot_night, read_tile_positions, write_schedule_text
         audit.write(audit_path, format='ascii.ecsv', overwrite=args.overwrite)
         write_schedule_text(text_path, audit)
-        plot_night(plot_path, audit, read_tile_positions(args.input), targets, args.filter_name)
+        plot_night(plot_path, audit, read_tile_positions(args.input), targets, args.filter_name,
+                   bodies)
 
     print(f"Read: {args.input}")
     print(f"Selected targets: {before_non_overlap}")

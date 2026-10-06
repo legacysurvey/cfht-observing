@@ -35,11 +35,29 @@ their names unless `--prefix` is supplied:
   name (or the status of an unfilled slot in parentheses). The header
   records the twilight times and LMST bounds.
 - `targets-YYYY-MM-DD.pdf`: a rectilinear sky plot (`night_outputs.py`) with
-  RA on the x axis running from 270 degrees on the left, through 0, to -60
+  RA on the x axis running from 300 degrees on the left, through 0, to -60
   degrees (300) on the right, and DEC from -20 to +20 degrees. All `IN_IBIS=1`
   tiles in the requested filter show the footprint (remaining, `IN_HSC`, and
-  `DONE` tiles in different shades); the night's targets are colored by hours
-  after evening twilight, and the meridian at each twilight is marked.
+  `DONE` tiles in different shades); the night's targets are colored by their
+  requested `MAG_AB`, and the meridian at each twilight is marked. Venus,
+  Mars, Saturn, and Uranus are drawn at the midpoint of the night (between
+  the two twilights). The Moon, which moves several degrees per night, is
+  drawn at evening twilight (open circle) and morning twilight (filled
+  circle) with its track and an arrow showing the direction of motion.
+  Bodies outside the plotted RA/DEC range are omitted.
+
+## Bright planets
+
+`night_planning.bright_body_positions` samples topocentric GCRS positions of
+the Moon and the four planets at 25 evenly spaced times between the twilights
+using Astropy's built-in ephemeris (no downloads). GCRS axes match J2000 to
+within aberration, which is ample here; the directions must not be converted
+to barycentric ICRS. `exclude_near_planets` removes any candidate tile whose
+center comes within `--planet-avoid` degrees (default 1.0, roughly the MegaCam
+half-field plus margin; 0 disables) of Venus, Mars, Saturn, or Uranus at any
+sampled time, before scheduling. Skipped tiles are printed and recorded in the
+schedule ECSV metadata as `PLANET_EXCLUDED`. The Moon is deliberately not
+avoided: this program observes when the Moon is set or nearly so.
 
 FITS and XML rows follow scheduled time order. The schedule is a planning
 record; the target import format itself does not enforce start times or
