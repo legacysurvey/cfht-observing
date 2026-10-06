@@ -36,7 +36,7 @@ their names unless `--prefix` is supplied:
   records the twilight times and LMST bounds.
 - `targets-YYYY-MM-DD.pdf`: a rectilinear sky plot (`night_outputs.py`) with
   RA on the x axis running from 300 degrees on the left, through 0, to -60
-  degrees (300) on the right, and DEC from -20 to +20 degrees. All `IN_IBIS=1`
+  degrees (300) on the right, and DEC from -25 to +25 degrees. All `IN_IBIS=1`
   tiles in the requested filter show the footprint (remaining, `IN_HSC`, and
   `DONE` tiles in different shades); the night's targets are colored by their
   requested `MAG_AB`, and the meridian at each twilight is marked. Venus,

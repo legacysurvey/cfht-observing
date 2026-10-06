@@ -15,7 +15,7 @@ import numpy as np
 # Plot limits requested for a "looking up" view: RA decreases to the right.
 PLOT_RA_LEFT = 300.0
 PLOT_RA_RIGHT = -60.0
-PLOT_DEC_RANGE = (-20.0, 20.0)
+PLOT_DEC_RANGE = (-25.0, 25.0)
 
 
 def lmst_hms(lmst_deg: float) -> str:
@@ -166,7 +166,10 @@ def plot_night(path: Path, audit, tiles: dict[str, np.ndarray], targets,
                 ax.annotate('', xy=(x[-1], y[-1]), xytext=(x[-2], y[-2]), zorder=5,
                             arrowprops=dict(arrowstyle='-|>', color=style['color'], lw=1.2,
                                             shrinkA=0, shrinkB=6))
-            label_x, label_y = (x[-1], y[-1]) if in_view[-1] else (x[0], y[0])
+            # Anchor the label beyond the end of the track that is farthest to
+            # the right on the page (smallest plotted x), so it clears both symbols.
+            right_end = 0 if x[0] < x[-1] else -1
+            label_x, label_y = x[right_end], y[right_end]
             label = 'Moon (evening \u2192 morning)'
             if 'MOON_ILLUMINATION' in meta:
                 label = f'{100 * meta["MOON_ILLUMINATION"]:.0f}% ' + label
@@ -178,8 +181,8 @@ def plot_night(path: Path, audit, tiles: dict[str, np.ndarray], targets,
             label_x, label_y = x[middle], y[middle]
             label = style['label']
         near_top = label_y > PLOT_DEC_RANGE[1] - 3.0
-        ax.annotate(label, (label_x, label_y), xytext=(6, -10 if near_top else 5),
-                    textcoords='offset points', fontsize=8, zorder=5)
+        ax.annotate(label, (label_x, label_y), xytext=(8, -10 if near_top else 0),
+                    textcoords='offset points', fontsize=8, va='center', zorder=5)
 
     ax.set_xlim(PLOT_RA_LEFT, PLOT_RA_RIGHT)
     ax.set_ylim(*PLOT_DEC_RANGE)

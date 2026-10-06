@@ -38,8 +38,8 @@ evening/morning LMST bounds, FITS/XML queues in time order, a
 targets-YYYY-MM-DD.schedule.ecsv table with every slot and any unfilled slots,
 a plain-text targets-YYYY-MM-DD.txt timeline (exposure-start UT, midpoint LMST,
 object name), and a targets-YYYY-MM-DD.pdf sky plot of the night's targets over
-the tile footprint (RA 300 on the left through 0 to -60 on the right, DEC -20
-to +20), colored by requested MAG_AB, with the Moon at both twilights and
+the tile footprint (RA 300 on the left through 0 to -60 on the right, DEC -25
+to +25), colored by requested MAG_AB, with the Moon at both twilights and
 Venus, Mars, Saturn, and Uranus at mid-night (the plot requires matplotlib).
 Night planning skips tiles whose centers pass within --planet-avoid degrees
 (default 1.0; 0 disables) of those four planets at any time during the night;
