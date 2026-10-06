@@ -609,7 +609,7 @@ def main() -> None:
     if args.night:
         try:
             from night_planning import (bright_body_positions, describe_night, exclude_near_planets,
-                                        night_bounds, schedule_night)
+                                        moon_illumination, night_bounds, schedule_night)
         except ImportError as exc:
             raise SystemExit('Night planning requires numpy and astropy; '
                              'install requirements.txt in your Python environment') from exc
@@ -623,6 +623,7 @@ def main() -> None:
                                         args.lmst_window, args.non_overlapping,
                                         args.min_separation)
         audit.meta['PLANET_AVOID_DEG'] = args.planet_avoid
+        audit.meta['MOON_ILLUMINATION'] = moon_illumination(night.start + (night.end - night.start) / 2)
         audit.meta['PLANET_EXCLUDED'] = sorted(near_planets)
     elif args.non_overlapping:
         targets = trim_non_overlapping(

@@ -43,7 +43,9 @@ their names unless `--prefix` is supplied:
   Mars, Saturn, and Uranus are drawn at the midpoint of the night (between
   the two twilights). The Moon, which moves several degrees per night, is
   drawn at evening twilight (open circle) and morning twilight (filled
-  circle) with its track and an arrow showing the direction of motion.
+  circle) with its track and an arrow showing the direction of motion; its
+  label gives the illuminated fraction at mid-night (also in the text file
+  header and the schedule metadata as `MOON_ILLUMINATION`).
   Bodies outside the plotted RA/DEC range are omitted.
 
 ## Bright planets
@@ -58,6 +60,12 @@ half-field plus margin; 0 disables) of Venus, Mars, Saturn, or Uranus at any
 sampled time, before scheduling. Skipped tiles are printed and recorded in the
 schedule ECSV metadata as `PLANET_EXCLUDED`. The Moon is deliberately not
 avoided: this program observes when the Moon is set or nearly so.
+`moon_illumination` returns the illuminated fraction from the Sun-Moon
+elongation, (1 - cos e) / 2.
+
+All positions, altitudes, twilights, and sidereal times use the CFHT site on
+Mauna Kea (`night_planning.CFHT`: 155 28 18 W, 19 49 41.86 N, 4204 m, from
+the CFHT Observatory Manual) and HST = UTC-10 for the calendar date.
 
 FITS and XML rows follow scheduled time order. The schedule is a planning
 record; the target import format itself does not enforce start times or

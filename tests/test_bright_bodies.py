@@ -7,7 +7,7 @@ from astropy.coordinates import get_body, get_sun
 
 from make_cfht_targets import TileTarget
 from night_planning import (AVOIDED_PLANETS, BRIGHT_BODIES, CFHT, bright_body_positions,
-                            exclude_near_planets, night_bounds, offline_iers)
+                            exclude_near_planets, moon_illumination, night_bounds, offline_iers)
 
 
 class BrightBodyTests(unittest.TestCase):
@@ -51,6 +51,19 @@ class BrightBodyTests(unittest.TestCase):
         self.assertEqual(excluded, {})
         with self.assertRaises(ValueError):
             exclude_near_planets([near], self.positions, -1.0)
+
+    def test_moon_illumination(self):
+        from astropy.time import Time
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            # Known full Moon 2026-01-03 10:03 UT and new Moon 2026-01-18 19:52 UT.
+            self.assertGreater(moon_illumination(Time('2026-01-03T10:03:00')), 0.99)
+            self.assertLess(moon_illumination(Time('2026-01-18T19:52:00')), 0.01)
+            middle = self.night.start + (self.night.end - self.night.start) / 2
+            fraction = moon_illumination(middle)
+        # Waning crescent on 2026-10-07/08, about 2 days before new Moon (about 5%).
+        self.assertGreater(fraction, 0.02)
+        self.assertLess(fraction, 0.25)
 
     def test_avoided_planets_are_the_bright_four(self):
         self.assertEqual(set(AVOIDED_PLANETS), {'venus', 'mars', 'saturn', 'uranus'})

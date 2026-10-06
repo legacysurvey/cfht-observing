@@ -35,6 +35,8 @@ def write_schedule_text(path: Path, audit) -> None:
         f'# LMST at twilight: {lmst_hms(meta["LMST_START"])} to {lmst_hms(meta["LMST_END"])}',
         f'# Exposure {meta["EXPTIME"]:g} s + overhead {meta["OVERHEAD"]:g} s; '
         f'{meta["SCHEDULED"]} of {meta["CAPACITY"]} slots filled',
+        f'# Moon: {100 * meta["MOON_ILLUMINATION"]:.0f}% illuminated at mid-night'
+        if 'MOON_ILLUMINATION' in meta else '# Moon: illumination not computed',
         '# UT is the exposure start; LMST is at the exposure midpoint.',
         f'# {"UT":19s}  {"LMST":8s}  {"LMST_DEG":8s}  OBJECT',
     ]
@@ -166,6 +168,8 @@ def plot_night(path: Path, audit, tiles: dict[str, np.ndarray], targets,
                                             shrinkA=0, shrinkB=6))
             label_x, label_y = (x[-1], y[-1]) if in_view[-1] else (x[0], y[0])
             label = 'Moon (evening \u2192 morning)'
+            if 'MOON_ILLUMINATION' in meta:
+                label = f'{100 * meta["MOON_ILLUMINATION"]:.0f}% ' + label
         else:
             if not in_view[middle]:
                 continue

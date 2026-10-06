@@ -144,6 +144,19 @@ def bright_body_positions(night, steps=25):
     return positions
 
 
+def moon_illumination(time):
+    """Fraction of the lunar disk illuminated as seen from CFHT at ``time``.
+
+    Uses the Sun-Moon elongation: k = (1 - cos(elongation)) / 2, which is
+    exact for a spherical Moon (the Sun's distance is effectively infinite).
+    """
+    with offline_iers():
+        moon = get_body('moon', time, location=CFHT)
+        sun = get_sun(time)
+        elongation = moon.separation(sun).rad
+    return float((1.0 - np.cos(elongation)) / 2.0)
+
+
 def exclude_near_planets(targets, positions, radius=1.0):
     """Split targets into (kept, excluded) by proximity to any avoided planet.
 

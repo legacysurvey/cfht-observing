@@ -21,7 +21,8 @@ def sample_audit():
     audit['MAG_AB'] = [24.5, np.nan]
     audit.meta.update(NIGHT='2026-10-07', TWILIGHT=15.0, START_UTC='2026-10-08T05:04:54.296',
                       END_UTC='2026-10-08T15:14:12.896', LMST_START=297.605, LMST_END=90.35,
-                      EXPTIME=130.0, OVERHEAD=44.0, CAPACITY=2, SCHEDULED=1)
+                      EXPTIME=130.0, OVERHEAD=44.0, CAPACITY=2, SCHEDULED=1,
+                      MOON_ILLUMINATION=0.123)
     return audit
 
 
@@ -45,6 +46,7 @@ class NightOutputTests(unittest.TestCase):
         self.assertEqual(data[0].split(), ['2026-10-08', '05:04:54', '19:50:00', '297.500', 'DESI_M4376_1'])
         self.assertIn('(NO_NEARBY_TARGET)', data[1])
         self.assertTrue(any('LMST at twilight: 19:50:25 to 06:01:24' in line for line in lines))
+        self.assertTrue(any('Moon: 12% illuminated' in line for line in lines))
 
     def test_read_positions_and_plot(self):
         with tempfile.TemporaryDirectory() as tmp:
