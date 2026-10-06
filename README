@@ -45,6 +45,12 @@ Night planning skips tiles whose centers pass within --planet-avoid degrees
 (default 1.0; 0 disables) of those four planets at any time during the night;
 the Moon is not avoided. Skipped tiles are printed and listed in the schedule
 ECSV metadata (PLANET_EXCLUDED).
+
+--non-overlapping only prevents overlap among the targets in the output being
+generated (DONE tiles are never candidates, so they are not compared against).
+--avoid-done (which implies --non-overlapping) additionally treats already
+observed tiles (DONE!=0) in the same filter as occupied, so no new target
+overlaps one of them. Both apply to ordinary and nightly plans.
 The --lmst-window option sets the allowed LMST_DESIGN mismatch in degrees
 (default +/-5 degrees); within that window the highest PRIORITY wins,
 with lower declination breaking ties. PRIORITY is assigned from stripe
@@ -73,7 +79,7 @@ Additional targets for NAOC time
 
 LBNL scheduled nights
 python make_cfht_targets.py --night 2026-09-09 --program LBNL --dec -90 -12 --non-overlapping --overwrite
-python make_cfht_targets.py --night 2026-10-07 --program LBNL --dec -90 -12 --overwrite
+python make_cfht_targets.py --night 2026-10-07 --program LBNL --dec -90 -12 --non-overlapping --overwrite
 
 
 Uploads to Kealahou:

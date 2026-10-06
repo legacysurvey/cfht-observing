@@ -160,6 +160,12 @@ def parse_args() -> argparse.Namespace:
         help="Greedily trim to non-overlapping 1-degree footprints.",
     )
     parser.add_argument(
+        "--avoid-done",
+        action="store_true",
+        help="With --non-overlapping (implied), also treat already-observed tiles (DONE!=0) "
+             "in the same filter as occupied, so new targets do not overlap them.",
+    )
+    parser.add_argument(
         "--min-separation",
         type=float,
         default=DEFAULT_MIN_SEPARATION_DEG,
@@ -192,6 +198,8 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         parser.error("--min-separation must be positive")
     if not args.filter_name:
         parser.error("--filter must not be empty")
+    if args.avoid_done:
+        args.non_overlapping = True
     args.filter_name = args.filter_name.upper()
     if args.filter_name not in EXTINCTION_COEFFICIENT:
         parser.error('--filter needs a configured extinction coefficient: '
@@ -343,13 +351,57 @@ def in_dec_range(dec_deg: float, dec_range: Sequence[float]) -> bool:
     return dec_min <= dec_deg <= dec_max
 
 
+def read_done_positions(ecsv_path: Path, filter_name: str) -> list[tuple[float, float]]:
+    """Return (RA, DEC) of already-observed tiles (DONE!=0) in ``filter_name``."""
+    normalized_filter = filter_name.upper()
+    positions: list[tuple[float, float]] = []
+    column_index = None
+    with ecsv_path.open("r", encoding="utf-8") as handle:
+        for stripped in (line.strip() for line in handle):
+            if not stripped or stripped.startswith("#"):
+                continue
+            parts = next(csv.reader([stripped], delimiter=" ", skipinitialspace=True, strict=True))
+            if column_index is None:
+                column_index = {name: index for index, name in enumerate(parts)}
+                for name in ("RA", "DEC", "FILTER", "DONE"):
+                    if name not in column_index:
+                        raise ValueError(f"{ecsv_path} is missing required column {name}")
+                continue
+            if parts[column_index["FILTER"]].upper() != normalized_filter:
+                continue
+            if float(parts[column_index["DONE"]]) == 0.0:
+                continue
+            positions.append((float(parts[column_index["RA"]]), float(parts[column_index["DEC"]])))
+    if column_index is None:
+        raise ValueError(f"{ecsv_path} does not contain a data header")
+    return positions
+
+
+def footprints_overlap(ra1: float, dec1: float, ra2: float, dec2: float,
+                       min_separation_deg: float) -> bool:
+    """True when both the DEC and cos(DEC)-projected RA separations are below the limit."""
+    if abs(dec1 - dec2) >= min_separation_deg:
+        return False
+    mean_dec_rad = math.radians(0.5 * (dec1 + dec2))
+    return angular_ra_separation(ra1, ra2) * abs(math.cos(mean_dec_rad)) < min_separation_deg
+
+
 def trim_non_overlapping(
-    targets: Iterable[TileTarget], min_separation_deg: float
+    targets: Iterable[TileTarget], min_separation_deg: float,
+    blocked: Iterable[tuple[float, float]] = (),
 ) -> list[TileTarget]:
-    """Greedily remove targets whose projected 1-degree footprints overlap."""
+    """Greedily remove targets whose projected 1-degree footprints overlap.
+
+    ``blocked`` holds (RA, DEC) positions that count as already occupied, such
+    as previously observed tiles; they are never returned but exclude any
+    candidate overlapping them.
+    """
 
     selected: list[TileTarget] = []
     dec_bins: dict[int, list[TileTarget]] = defaultdict(list)
+    for ra_deg, dec_deg in blocked:
+        dec_bins[math.floor(dec_deg / min_separation_deg)].append(
+            TileTarget(object_name="", ra_deg=ra_deg, dec_deg=dec_deg))
 
     for target in targets:
         dec_bin = math.floor(target.dec_deg / min_separation_deg)
@@ -619,16 +671,23 @@ def main() -> None:
         targets, near_planets = exclude_near_planets(targets, bodies, args.planet_avoid)
         for name, planet in sorted(near_planets.items()):
             print(f'Skipping {name}: within {args.planet_avoid:g} deg of {planet.capitalize()}')
+        blocked = read_done_positions(args.input, args.filter_name) if args.avoid_done else []
+        if args.avoid_done:
+            print(f'Avoiding overlap with {len(blocked)} DONE {args.filter_name} tiles')
         targets, audit = schedule_night(targets, night, args.exptime, args.overhead,
                                         args.lmst_window, args.non_overlapping,
-                                        args.min_separation)
+                                        args.min_separation, blocked=blocked)
+        audit.meta['AVOID_DONE'] = bool(args.avoid_done)
         audit.meta['PLANET_AVOID_DEG'] = args.planet_avoid
         audit.meta['MOON_ILLUMINATION'] = moon_illumination(night.start + (night.end - night.start) / 2)
         audit.meta['PLANET_EXCLUDED'] = sorted(near_planets)
     elif args.non_overlapping:
+        blocked = read_done_positions(args.input, args.filter_name) if args.avoid_done else []
+        if args.avoid_done:
+            print(f'Avoiding overlap with {len(blocked)} DONE {args.filter_name} tiles')
         targets = trim_non_overlapping(
             sorted(targets, key=lambda t: (-t.priority, t.dec_deg, t.ra_deg, t.object_name)),
-            args.min_separation)
+            args.min_separation, blocked)
         targets.sort(key=lambda t: t.ra_deg)
 
     output_rows = make_output_targets(targets, args.mag_ab)

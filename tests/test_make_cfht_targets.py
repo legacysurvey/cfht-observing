@@ -8,7 +8,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from make_cfht_targets import iter_matching_targets, main, parse_args, trim_non_overlapping
+from make_cfht_targets import (iter_matching_targets, main, parse_args, read_done_positions,
+                               trim_non_overlapping)
 
 
 class SelectionTests(unittest.TestCase):
@@ -78,6 +79,31 @@ class SelectionTests(unittest.TestCase):
         # allowed into the greedy trimming step.
         trimmed = trim_non_overlapping(self.targets(['LBNL']), 1.0)
         self.assertEqual([target.object_name for target in trimmed], ['lbl'])
+
+    def test_avoid_done_blocks_overlap_with_observed_tiles(self):
+        # 'done' at RA=4 is observed in M4376; 'blank' (RA=1) and 'future' (RA=2)
+        # are not near it. Add an unobserved tile overlapping 'done'.
+        self.rows.append(['near_done', 4.5, 0.2, 'M4376', 1, 0, 0, 'LBNL', 9.0, 0.0])
+        self.rows.append(['done_other_filter', 7, 0, 'M4112', 1, 0, 1, 'LBNL', 9.0, 0.0])
+        self.rows.append(['near_other_filter_done', 7.5, 0, 'M4376', 1, 0, 0, 'LBNL', 9.0, 0.0])
+        self.write_table()
+        blocked = read_done_positions(self.path, 'M4376')
+        self.assertEqual(blocked, [(4.0, 0.0)])
+        candidates = self.targets(['LBNL'])
+        self.assertIn('near_done', [t.object_name for t in candidates])
+        without = trim_non_overlapping(candidates, 1.0)
+        with_block = trim_non_overlapping(candidates, 1.0, blocked)
+        self.assertIn('near_done', [t.object_name for t in without])
+        self.assertNotIn('near_done', [t.object_name for t in with_block])
+        # DONE tiles in another filter do not block, and blocked positions are never returned.
+        self.assertIn('near_other_filter_done', [t.object_name for t in with_block])
+        self.assertTrue(all(t.object_name for t in with_block))
+
+    def test_avoid_done_implies_non_overlapping(self):
+        with patch('sys.argv', ['make_cfht_targets.py', '--avoid-done']):
+            args = parse_args()
+        self.assertTrue(args.avoid_done)
+        self.assertTrue(args.non_overlapping)
 
     def test_missing_hsc_column_fails(self):
         self.write_table(omit='IN_HSC')

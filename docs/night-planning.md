@@ -48,6 +48,18 @@ their names unless `--prefix` is supplied:
   header and the schedule metadata as `MOON_ILLUMINATION`).
   Bodies outside the plotted RA/DEC range are omitted.
 
+## Overlap control
+
+`--non-overlapping` rejects a candidate whose footprint (DEC separation and
+cos(DEC)-projected RA separation both below `--min-separation`, default 1
+degree) overlaps a target already chosen in this run. It knows nothing about
+earlier nights: `DONE` tiles are removed from the candidate list before
+selection, so a fresh tile that overlaps an observed one is eligible.
+`--avoid-done` (which turns on `--non-overlapping`) also seeds the occupied
+set with every `DONE!=0` tile in the requested filter, read from the tile
+catalog, so new targets avoid previously observed sky as well as each other.
+The schedule metadata records `AVOID_DONE`.
+
 ## Bright planets
 
 `night_planning.bright_body_positions` samples topocentric GCRS positions of

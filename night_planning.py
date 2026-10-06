@@ -200,12 +200,16 @@ def pick_target(targets, lmst, available, window):
 
 
 def schedule_night(targets, night, exptime=130.0, overhead=44.0,
-                   lmst_window=5.0, non_overlapping=False, min_separation=1.0):
+                   lmst_window=5.0, non_overlapping=False, min_separation=1.0,
+                   blocked=None):
     """Return queue targets in time order plus an audit table of every slot.
 
     The exposure begins at slot start; overhead follows it. Selection uses
     LMST at exposure midpoint. A target must be above the geometric horizon
     at both exposure endpoints. Empty slots remain explicit in the audit.
+    With ``non_overlapping``, ``blocked`` (RA, DEC) positions such as
+    already-observed tiles exclude any candidate within ``min_separation``
+    before scheduling begins.
     """
     if not math.isfinite(lmst_window) or not 0 < lmst_window <= 180:
         raise ValueError('LMST window must be in (0, 180] degrees')
@@ -221,6 +225,12 @@ def schedule_night(targets, night, exptime=130.0, overhead=44.0,
     dec = np.asarray([t.dec_deg for t in targets])
     coords = SkyCoord(ra=ra * u.deg, dec=dec * u.deg)
     available = set(range(len(targets)))
+    if non_overlapping and blocked:
+        for blocked_ra, blocked_dec in blocked:
+            ra_sep = np.abs((ra - blocked_ra + 180) % 360 - 180)
+            ra_sep *= np.abs(np.cos(np.deg2rad((dec + blocked_dec) / 2)))
+            overlapping = (np.abs(dec - blocked_dec) < min_separation) & (ra_sep < min_separation)
+            available.difference_update(np.flatnonzero(overlapping))
     selected, rows = [], []
     with offline_iers():
         check_iers_coverage(Time([night.start, night.end]))

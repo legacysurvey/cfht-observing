@@ -119,6 +119,18 @@ class NightTests(unittest.TestCase):
         self.assertEqual([t.object_name for t in selected], ['south'])
         self.assertEqual(audit.meta['CAPACITY'], 2)
 
+    def test_blocked_positions_exclude_overlapping_candidates(self):
+        night = self.short_night()
+        lmst = night.lmst_start
+        targets = [TileTarget('near_done', lmst, 0.3, lmst),
+                   TileTarget('clear', lmst + 3, 0, lmst)]
+        selected, audit = schedule_night(targets, night, non_overlapping=True,
+                                         blocked=[(lmst, 0.0)])
+        self.assertEqual([t.object_name for t in selected], ['clear'])
+        # Without non_overlapping the blocked list is ignored.
+        selected, audit = schedule_night(targets, night, blocked=[(lmst, 0.0)])
+        self.assertEqual({t.object_name for t in selected}, {'near_done', 'clear'})
+
     def test_zero_capacity_and_no_candidates(self):
         selected, audit = schedule_night([], self.short_night(100))
         self.assertEqual(len(selected), 0)
