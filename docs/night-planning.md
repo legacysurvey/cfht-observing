@@ -21,7 +21,7 @@ python update_lmst_design.py
 python make_cfht_targets.py --night 2026-09-09
 ```
 
-The night mode writes three files in `plans/`, using the night date in
+The night mode writes five files in `plans/`, using the night date in
 their names unless `--prefix` is supplied:
 
 - `targets-YYYY-MM-DD.xml`: the existing CFHT target-import format.
@@ -30,6 +30,16 @@ their names unless `--prefix` is supplied:
   slots, exposure start/end and slot end in UTC, object name, midpoint LMST,
   design LMST, their signed difference, minimum endpoint altitude, priority,
   and status.
+- `targets-YYYY-MM-DD.txt`: a plain-text timeline with one line per slot:
+  exposure-start UT, midpoint LMST as hh:mm:ss and degrees, and the object
+  name (or the status of an unfilled slot in parentheses). The header
+  records the twilight times and LMST bounds.
+- `targets-YYYY-MM-DD.pdf`: a rectilinear sky plot (`night_outputs.py`) with
+  RA on the x axis running from 270 degrees on the left, through 0, to -60
+  degrees (300) on the right, and DEC from -20 to +20 degrees. All `IN_IBIS=1`
+  tiles in the requested filter show the footprint (remaining, `IN_HSC`, and
+  `DONE` tiles in different shades); the night's targets are colored by hours
+  after evening twilight, and the meridian at each twilight is marked.
 
 FITS and XML rows follow scheduled time order. The schedule is a planning
 record; the target import format itself does not enforce start times or

@@ -578,8 +578,13 @@ def main() -> None:
     prefix = args.prefix or f"targets-{args.night or args.date}"
     xml_path, fits_path = output_paths(args.outdir, prefix, args.overwrite)
     audit_path = args.outdir / f'{prefix}.schedule.ecsv'
-    if args.night and audit_path.exists() and not args.overwrite:
-        raise FileExistsError(f'{audit_path} already exists; use --overwrite to replace it')
+    text_path = args.outdir / f'{prefix}.txt'
+    plot_path = args.outdir / f'{prefix}.pdf'
+    if args.night and not args.overwrite:
+        existing = [str(p) for p in (audit_path, text_path, plot_path) if p.exists()]
+        if existing:
+            raise FileExistsError('Output file(s) already exist; use --overwrite to replace them: '
+                                  + ', '.join(existing))
 
     targets = sorted(
         iter_matching_targets(
@@ -623,7 +628,10 @@ def main() -> None:
     write_xml(args.template, xml_path, output_rows)
     write_fits(fits_path, output_rows)
     if audit is not None:
+        from night_outputs import plot_night, read_tile_positions, write_schedule_text
         audit.write(audit_path, format='ascii.ecsv', overwrite=args.overwrite)
+        write_schedule_text(text_path, audit)
+        plot_night(plot_path, audit, read_tile_positions(args.input), targets, args.filter_name)
 
     print(f"Read: {args.input}")
     print(f"Selected targets: {before_non_overlap}")
@@ -634,6 +642,8 @@ def main() -> None:
         if missing:
             print('Night is not full: inspect the schedule for slots without eligible nearby targets.')
         print(f'Wrote: {audit_path}')
+        print(f'Wrote: {text_path}')
+        print(f'Wrote: {plot_path}')
     elif args.non_overlapping:
         print(f"After non-overlap trim: {len(output_rows)}")
     print(f"Wrote: {xml_path}")
