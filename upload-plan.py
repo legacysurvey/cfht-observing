@@ -5,6 +5,7 @@ import json
 import os
 import sys
 from astropy.table import Table
+from collections import Counter
 
 from kealahou_api import KealahouProgram
 
@@ -99,6 +100,10 @@ def main():
         target_name = target_token_to_name[target_token]
         targetname_to_og[target_name] = og_token
         og_to_targetname[og_token] = target_name
+
+    c = Counter(og_priority.values())
+    for p,n in c.most_common():
+        print('  % 5i OGs with priority = %s' % (n, p))
 
     # Reset all OGs to INACTIVE, except ones that have one of our planned targets
     # (and a matching OT!)
