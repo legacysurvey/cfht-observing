@@ -107,15 +107,20 @@ def main():
         old_done = tiles['DONE'][ind]
         tiles['DONE'][ind] = 1
         old_expnum = tiles['EXPNUM'][ind]
-        tiles['EXPNUM'][ind] = expnum
         old_date = tiles['DATE'][ind]
-        tiles['DATE'][ind] = yymmdd
         old_et = tiles['EXPTIME'][ind]
-        exptime = np.round(exptime, decimals=3)
-        tiles['EXPTIME'][ind] = exptime
-        print('Marked tile', target_name, 'DONE from', old_done, 'to', 1,
-              'EXPNUM from', old_expnum, 'to', expnum, 'DATE from', old_date, 'to', yymmdd,
-              'EXPTIME from', old_et, 'to', exptime)
+        if old_done == 0 or expnum > old_expnum:
+            # update
+            tiles['EXPNUM'][ind] = expnum
+            tiles['DATE'][ind] = yymmdd
+            exptime = np.round(exptime, decimals=3)
+            tiles['EXPTIME'][ind] = exptime
+            print('Marked tile', target_name, 'DONE from', old_done, 'to', 1,
+                  'EXPNUM from', old_expnum, 'to', expnum, 'DATE from', old_date, 'to', yymmdd,
+                  'EXPTIME from', old_et, 'to', exptime)
+        else:
+            print('Skipped tile', target_name, 'that was already populated:'
+                  'EXPNUM', old_expnum, 'vs current', expnum, 'DATE', old_date, 'vs current', yymmdd)
     tiles.write(args.tile_file, overwrite=True)
     print('Wrote updated tile file')
 
