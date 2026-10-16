@@ -62,11 +62,11 @@ Night planning uses local Earth-orientation and leap-second files in data/iers/;
 it does not download anything and works with Astropy 4.3.1 or newer.
 
 Progress to date (requires numpy and matplotlib):
-python plot_progress.py --filter M4376
-Prints the completed fraction of tiles (DONE tiles over IN_IBIS=1, IN_HSC=0
-tiles plus any DONE tiles inside IN_HSC), tile counts by program, approximate
-sky areas for reference, and writes obstatus/progress-M4376.pdf with the same
-sky framing as the nightly plot.
+python plot_progress.py
+Prints, per filter, the completed fraction of tiles (DONE tiles over IN_IBIS=1,
+IN_HSC=0 tiles plus any DONE tiles inside IN_HSC) and tile counts by program,
+and writes obstatus/progress.pdf with one panel per filter (M4376 above
+M4112; choose others with --filters) in the same sky framing as the nightly plot.
 
 Repository layout and tests:
 The executable scripts and shared night_planning.py module live at the repository
