@@ -63,10 +63,10 @@ it does not download anything and works with Astropy 4.3.1 or newer.
 
 Progress to date (requires numpy and matplotlib):
 python plot_progress.py --filter M4376
-Prints the number of DONE tiles by program and the observed fraction of the
-footprint by area (each tile as a 1-degree square, rasterized), both for the
-full IN_IBIS footprint and excluding the IN_HSC region, and writes
-obstatus/progress-M4376.pdf with the same sky framing as the nightly plot.
+Prints the completed fraction of tiles (DONE tiles over IN_IBIS=1, IN_HSC=0
+tiles plus any DONE tiles inside IN_HSC), tile counts by program, approximate
+sky areas for reference, and writes obstatus/progress-M4376.pdf with the same
+sky framing as the nightly plot.
 
 Repository layout and tests:
 The executable scripts and shared night_planning.py module live at the repository

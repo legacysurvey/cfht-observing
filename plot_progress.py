@@ -2,11 +2,12 @@
 """Plot the footprint observed to date in one filter and report the completed fraction.
 
 Requires numpy and matplotlib. Reads obstatus/cfht-tiles.ecsv (no astropy needed).
-Tiles are a dense dither pattern, so the fraction is computed by area: each
-tile is a square field of --field-size degrees on a side (default 1.0, the same
-footprint size as --non-overlapping in make_cfht_targets.py), rasterized on a
-fine RA/DEC grid with the RA extent scaled by 1/cos(DEC). The reported areas are
-true solid angle (cells weighted by cos DEC).
+The completed fraction is the fraction of tiles: DONE!=0 tiles divided by the
+tiles the program is responsible for in that filter (IN_IBIS=1 and IN_HSC=0,
+plus any DONE tiles that fall inside the IN_HSC region so that every
+observation counts). Counts for the full IN_IBIS footprint are also printed.
+Sky areas are reported for reference only, treating each tile as a square
+field of --field-size degrees (default 1.0) rasterized on a fine grid.
 
 Example:
     python plot_progress.py --filter M4376
@@ -119,14 +120,21 @@ def main() -> None:
     area_done_cfht = raster.area(cover_done & cover_cfht)
     dates = sorted(set(tiles['DATE'][done]))
 
-    print(f'Filter {args.filter_name}: {footprint.sum()} IN_IBIS tiles, {done.sum()} DONE '
-          f'({100 * done.sum() / footprint.sum():.1f}% of tiles)')
+    responsible = footprint & (~hsc | done)
+    n_total, n_done = int(responsible.sum()), int(done.sum())
+    fraction = n_done / n_total
+    print(f'Filter {args.filter_name}: {n_done} of {n_total} tiles observed ({100 * fraction:.1f}%)'
+          f' [IN_IBIS=1 and IN_HSC=0, plus {int((done & hsc).sum())} DONE tiles inside IN_HSC]')
+    print(f'  Full IN_IBIS footprint: {n_done} of {int(footprint.sum())} tiles '
+          f'({100 * n_done / footprint.sum():.1f}%); {int(hsc.sum())} tiles are IN_HSC')
     for program in sorted(set(tiles['PROGRAM'][footprint])):
         sel = footprint & (tiles['PROGRAM'] == program)
-        print(f'  PROGRAM {program or "(blank)"}: {sel.sum()} tiles, {(sel & done).sum()} DONE')
-    print(f'Full IN_IBIS footprint:        {area_all:9.1f} sq deg; observed {area_done:8.1f} sq deg '
+        print(f'  PROGRAM {program or "(blank)"}: {sel.sum()} tiles ({(sel & ~hsc).sum()} outside IN_HSC), '
+              f'{(sel & done).sum()} DONE')
+    print(f'Sky area for reference (1 tile = {args.field_size:g} deg square):')
+    print(f'  Full IN_IBIS footprint:  {area_all:8.1f} sq deg; observed {area_done:7.1f} sq deg '
           f'({100 * area_done / area_all:.1f}%)')
-    print(f'Excluding IN_HSC region:       {area_cfht:9.1f} sq deg; observed {area_done_cfht:8.1f} sq deg '
+    print(f'  Excluding IN_HSC region: {area_cfht:8.1f} sq deg; observed {area_done_cfht:7.1f} sq deg '
           f'({100 * area_done_cfht / area_cfht:.1f}%)')
     print(f'Observations on {len(dates)} nights: {dates[0]} to {dates[-1]}' if dates else 'No observations')
 
@@ -138,8 +146,8 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(14, 3.8))
     x_all = plot_ra(tiles['RA'])
     area_hsc = raster.area(cover_hsc & cover_all)
-    for mask, color, label in ((footprint & ~hsc, '0.85', f'Footprint (CFHT): {area_cfht:.0f} sq deg'),
-                               (hsc, '#c9d8ea', f'Footprint (IN_HSC): {area_hsc:.0f} sq deg')):
+    for mask, color, label in ((footprint & ~hsc, '0.85', f'Footprint: {int((footprint & ~hsc).sum())} tiles'),
+                               (hsc, '#c9d8ea', f'IN_HSC: {int(hsc.sum())} tiles')):
         ax.scatter(x_all[mask], tiles['DEC'][mask], s=4, c=color, marker='s', linewidths=0,
                    rasterized=True)
         ax.scatter([], [], marker='s', s=40, c=color, label=label)
@@ -162,9 +170,8 @@ def main() -> None:
     ax.set_aspect('equal')
     ax.grid(True, linewidth=0.3, alpha=0.5)
     ax.set_title(f'{args.filter_name} observed to date ({dates[-1] if dates else "none"}): '
-                 f'{area_done_cfht:.0f} of {area_cfht:.0f} sq deg outside IN_HSC '
-                 f'({100 * area_done_cfht / area_cfht:.1f}%); '
-                 f'{area_done:.0f} of {area_all:.0f} sq deg overall ({100 * area_done / area_all:.1f}%)',
+                 f'{n_done} of {n_total} tiles ({100 * fraction:.1f}%); '
+                 f'about {area_done_cfht:.0f} of {area_cfht:.0f} sq deg outside IN_HSC',
                  fontsize=10)
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.38), ncol=4, fontsize=7, frameon=False)
     args.outdir.mkdir(parents=True, exist_ok=True)
