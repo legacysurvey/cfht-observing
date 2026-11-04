@@ -7,7 +7,9 @@ either their center is more than one degree from POLU+IBIS sky (for
 example the whole of SGC-1, which has HSC-Niji+VST imaging only), or their
 1 x 1 degree field lies entirely inside an HSC-Niji+VST rectangle.
 PROGRAM is NAOC for exact OBJECT matches to target NAME values in plans/,
-otherwise LBNL for IN_IBIS=1 rows; labels already present are kept.
+otherwise LBNL for program tiles (IN_IBIS=1, IN_HSC=0); labels already
+present are kept, except that tiles outside the program with no exposure
+(IN_HSC=1 or IN_IBIS=0, DONE=0) carry no label: they are not to be observed.
 """
 
 from __future__ import annotations
@@ -50,8 +52,13 @@ def hsc_flags(table: Table, footprint: Footprint) -> np.ndarray:
     return (in_ibis & ~program).astype(np.int16)
 
 
-def labels(table: Table, names: set[str]) -> np.ndarray:
-    """PROGRAM: keep existing labels; NAOC from plans; LBNL for other IN_IBIS=1 rows."""
+def labels(table: Table, names: set[str], in_hsc=None) -> np.ndarray:
+    """PROGRAM: keep existing labels; NAOC from plans; LBNL for other program tiles.
+
+    ``in_hsc`` is the IN_HSC column to use (the freshly computed one); rows
+    outside the program (IN_IBIS=0 or IN_HSC=1) that have no exposure are
+    cleared to '' so that only observed tiles keep a label there.
+    """
     objects = np.char.strip(np.asarray(table['OBJECT'], dtype=str))
     missing = names - set(objects)
     if missing:
@@ -62,9 +69,15 @@ def labels(table: Table, names: set[str]) -> np.ndarray:
         program = np.char.strip(np.asarray(existing, dtype=str)).astype('U4')
     else:
         program = np.full(len(table), '', dtype='U4')
+    in_ibis = np.asarray(table['IN_IBIS']) == 1
+    if in_hsc is None:
+        in_hsc = np.asarray(table['IN_HSC']) == 1 if 'IN_HSC' in table.colnames else np.zeros(len(table), bool)
+    in_program = in_ibis & ~np.asarray(in_hsc).astype(bool)
+    done = np.asarray(table['DONE']) != 0 if 'DONE' in table.colnames else np.zeros(len(table), bool)
+    program[~in_program & ~done] = ''
     unlabeled = program == ''
-    program[unlabeled & (np.asarray(table['IN_IBIS']) == 1)] = 'LBNL'
-    program[unlabeled & np.isin(objects, sorted(names))] = 'NAOC'
+    program[unlabeled & in_program] = 'LBNL'
+    program[unlabeled & in_program & np.isin(objects, sorted(names))] = 'NAOC'
     return program
 
 
@@ -74,8 +87,8 @@ def update(root: Path) -> None:
     ecsv_path = root / 'obstatus/cfht-tiles.ecsv'
     ecsv = Table.read(ecsv_path)
     original_columns = [c for c in ecsv.colnames if c not in ('PROGRAM', 'IN_HSC')]
-    program = labels(ecsv, names)
     in_hsc = hsc_flags(ecsv, footprint)
+    program = labels(ecsv, names, in_hsc)
     before = np.asarray(ecsv['IN_HSC']) if 'IN_HSC' in ecsv.colnames else None
     ecsv['PROGRAM'] = program
     ecsv['IN_HSC'] = in_hsc

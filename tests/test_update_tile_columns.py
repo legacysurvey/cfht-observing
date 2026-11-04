@@ -59,13 +59,20 @@ class FootprintTests(unittest.TestCase):
 
 class LabelTests(unittest.TestCase):
     def test_program_plan_precedence_and_sticky_labels(self):
-        table = Table({'OBJECT': ['a', 'b', 'c', 'd', 'e'],
-                       'IN_IBIS': [1, 1, 0, 0, 1],
-                       'PROGRAM': ['', '', '', '', 'LBNL'],
-                       'RA': [180] * 5, 'DEC': [0] * 5})
-        np.testing.assert_array_equal(labels(table, {'a', 'c', 'e'}), ['NAOC', 'LBNL', 'NAOC', '', 'LBNL'])
+        # a: planned program tile; b: program tile; c: planned but outside IBIS (no label);
+        # d: outside; e: keeps its LBNL label; f: left the program unobserved (cleared);
+        # g: left the program but observed (keeps NAOC).
+        table = Table({'OBJECT': list('abcdefg'),
+                       'IN_IBIS': [1, 1, 0, 0, 1, 1, 1],
+                       'IN_HSC': [0, 0, 0, 0, 0, 1, 1],
+                       'DONE': [0, 0, 0, 0, 0, 0, 1],
+                       'PROGRAM': ['', '', '', '', 'LBNL', 'NAOC', 'NAOC'],
+                       'RA': [180] * 7, 'DEC': [0] * 7})
+        np.testing.assert_array_equal(labels(table, {'a', 'c', 'e', 'f'}),
+                                      ['NAOC', 'LBNL', '', '', 'LBNL', '', 'NAOC'])
         table.remove_column('PROGRAM')
-        np.testing.assert_array_equal(labels(table, {'a', 'c'}), ['NAOC', 'LBNL', 'NAOC', '', 'LBNL'])
+        np.testing.assert_array_equal(labels(table, {'a', 'c'}),
+                                      ['NAOC', 'LBNL', '', '', 'LBNL', '', ''])
 
     def test_hsc_flags_only_for_in_ibis_rows(self):
         fp = Footprint(polu_rects=[(100.0, 200.0, 0.0, 4.0)], excluded_rects=[(120.0, 180.0, 1.0, 3.0)],

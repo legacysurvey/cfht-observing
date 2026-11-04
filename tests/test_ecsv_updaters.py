@@ -61,9 +61,10 @@ class EcsvUpdaterTests(unittest.TestCase):
                 if 'PRIORITY' in changed_columns:
                     np.testing.assert_array_equal(saved['PRIORITY'], [10., 1., 1., 7.])
                 elif 'PROGRAM' in changed_columns:
-                    # Existing labels are kept; only unlabeled IN_IBIS rows get LBNL/NAOC.
+                    # 'planned' is now Niji-only and unobserved, so its label is cleared;
+                    # the other labels are kept.
                     np.testing.assert_array_equal(saved['PROGRAM'].filled(''),
-                                                  ['LBNL', 'NAOC', 'LBNL', ''])
+                                                  ['', 'NAOC', 'LBNL', ''])
                     np.testing.assert_array_equal(saved['IN_HSC'], [1, 0, 0, 0])
                 else:
                     np.testing.assert_array_equal(np.isfinite(saved['LMST_DESIGN']),

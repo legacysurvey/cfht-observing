@@ -51,10 +51,13 @@ POLU+IBIS sky, shared by every camera.
   `python update_lmst_design.py` as completion or footprint flags change.
   See [night planning](../docs/night-planning.md) for the algorithm.
 
-`PROGRAM` labels are sticky: `update_tile_columns.py` only labels rows that
-have no label yet (`NAOC` for exact `OBJECT` matches to target `NAME` values
-in the FITS or XML files in `plans/`, otherwise `LBNL` where `IN_IBIS=1`),
-so tiles that enter or leave the program keep their existing label.
+`PROGRAM` labels are sticky for program tiles: `update_tile_columns.py`
+only labels program rows (`IN_IBIS=1, IN_HSC=0`) that have no label yet
+(`NAOC` for exact `OBJECT` matches to target `NAME` values in the FITS or XML
+files in `plans/`, otherwise `LBNL`). Tiles outside the program carry no
+label unless they have been observed: a tile that leaves the footprint
+unobserved is cleared to the empty string, since it is not to be observed,
+while an observed one keeps the label it was observed under.
 
 To regenerate the flags after a change to the plan tables (requires numpy
 and astropy):
