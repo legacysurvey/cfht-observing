@@ -1,81 +1,78 @@
-"""Boundary checks for the HSC exclusion region."""
+"""Program membership from the imaging-plan footprint, and PROGRAM labels."""
 
 import unittest
 
 import numpy as np
 from astropy.table import Table
 
-from update_tile_columns import hsc_mask, labels
+from footprint import DECAM_INSIDE, DECAM_OUTER, MEGACAM_INSIDE, MEGACAM_OUTER, Footprint
+from update_tile_columns import hsc_flags, labels
 
 
-def stripe(dec, ra_min, ra_max):
-    return {'DEC': dec, 'RA_MIN': ra_min, 'RA_MAX': ra_max}
+class FootprintTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # One POLU stripe (RA 125-250, DEC 0-4) with a Niji rectangle filling RA 130-180,
+        # DEC 1-3, and a dropped sliver at RA 125-130, so POLU sky starts at RA 130.
+        cls.fp = Footprint(polu_rects=[(125.0, 250.0, 0.0, 4.0)],
+                           excluded_rects=[(130.0, 180.0, 1.0, 3.0), (125.0, 130.0, 0.0, 4.0)],
+                           niji_rects=[(130.0, 180.0, 1.0, 3.0)])
+
+    def program(self, ra, dec, outer=MEGACAM_OUTER, inside=MEGACAM_INSIDE):
+        return self.fp.program_tiles(ra, dec, outer, inside).astype(int).tolist()
+
+    def test_outer_margin_at_stripe_edges(self):
+        # Within one degree of the stripe (DEC 0-4) counts; beyond it does not.
+        self.assertEqual(self.program([200] * 4, [-0.9, -1.2, 4.9, 5.2]), [1, 0, 1, 0])
+        self.assertEqual(self.program([129.1, 128.8, 250.9, 251.2], [2] * 4), [1, 0, 1, 0])
+
+    def test_niji_interior_excluded_but_edges_kept(self):
+        # A 1x1 deg field entirely inside the Niji rectangle is excluded; one whose
+        # edge reaches POLU sky (within 0.5 deg of the rectangle edge) is kept.
+        self.assertEqual(self.program([155] * 4, [2.0, 1.4, 1.6, 2.6]), [0, 1, 0, 1])
+        self.assertEqual(self.program([130.4, 130.6, 179.6, 179.4], [2] * 4), [1, 0, 1, 0])
+
+    def test_dropped_sliver_is_not_program_sky(self):
+        # Deep in the dropped sliver nothing is near; within a degree of RA 130 the margin applies.
+        self.assertEqual(self.program([126.5, 129.5], [2.0, 2.0]), [0, 1])
+
+    def test_polu_ibis_zero_stripe_contributes_nothing(self):
+        fp = Footprint(polu_rects=[], excluded_rects=[], niji_rects=[(0.0, 10.0, 5.0, 8.0)])
+        self.assertEqual(fp.program_tiles([5, 5], [6.5, 4.0], MEGACAM_OUTER, MEGACAM_INSIDE).astype(int).tolist(), [0, 0])
+
+    def test_ra_wraparound(self):
+        fp = Footprint(polu_rects=[(350.0, 10.0, 0.0, 4.0)], excluded_rects=[], niji_rects=[])
+        self.assertEqual(fp.program_tiles([0, 359, 11.2, 348.8, 9.9], [2] * 5, MEGACAM_OUTER, MEGACAM_INSIDE).astype(int).tolist(), [1, 1, 0, 0, 1])
+
+    def test_decam_box_uses_its_own_size(self):
+        # DECam's 2.1 x 1.9 deg field: a tile 0.9 deg inside the Niji edge still reaches POLU
+        # sky, while MegaCam's 1 x 1 deg field at the same place is Niji-only.
+        fp = Footprint(polu_rects=[(125.0, 250.0, -1.0, 5.0)], excluded_rects=[(130.0, 180.0, 0.5, 3.5)],
+                       niji_rects=[(130.0, 180.0, 0.5, 3.5)])
+        self.assertEqual(fp.program_tiles([155, 155], [1.4, 2.0], DECAM_OUTER, DECAM_INSIDE).astype(int).tolist(), [1, 0])
+        self.assertEqual(fp.program_tiles([155, 155], [1.4, 2.0], MEGACAM_OUTER, MEGACAM_INSIDE).astype(int).tolist(), [0, 0])
+
+    def test_area(self):
+        fp = Footprint(polu_rects=[(0.0, 10.0, 0.0, 10.0)], excluded_rects=[], niji_rects=[])
+        self.assertAlmostEqual(fp.area(fp.polu), 10 * np.rad2deg(np.sin(np.deg2rad(10))), delta=1.0)
 
 
-class TileColumnTests(unittest.TestCase):
-    def test_isolated_stripe_inset(self):
-        stripes = [stripe(2.08, 126.60, 249.93)]
-        ra = [127.59, 127.60, 248.93, 248.94, 180, 180, 180, 180]
-        dec = [2.08] * 4 + [1.679, 1.68, 2.48, 2.481]
-        np.testing.assert_array_equal(hsc_mask(ra, dec, stripes),
-                                      [0, 1, 1, 0, 0, 1, 1, 0])
-
-    def test_joined_stripes_and_exposed_step(self):
-        stripes = [stripe(2.08, 126.60, 249.93),
-                   stripe(-0.72, 128.16, 228.30)]
-        # The shared edge at DEC=0.68 has no inset. At RA=240 the lower
-        # stripe is absent, so the upper stripe's southern inset remains.
-        ra = [180] * 5 + [240, 240, 240]
-        dec = [-1.121, -1.12, 0.68, 2.48, 2.481, 0.68, 1.679, 1.68]
-        np.testing.assert_array_equal(hsc_mask(ra, dec, stripes),
-                                      [0, 1, 1, 1, 0, 0, 0, 1])
-
-    def test_wraparound_and_independent_hemispheres(self):
-        stripes = [stripe(3.29, 315.57, 44.37),
-                   stripe(0.49, 313.82, 47.15),
-                   stripe(2.08, 126.60, 249.93),
-                   stripe(-0.72, 128.16, 228.30)]
-        ra = [0, 360, 359.9, 180, 316.56, 316.57, 43.37, 43.38, 0, 0]
-        dec = [1.89, 1.89, 1.89, 0.68, 3.29, 3.29, 3.29, 3.29,
-               3.69, 3.691]
-        np.testing.assert_array_equal(hsc_mask(ra, dec, stripes),
-                                      [1, 1, 1, 1, 0, 1, 1, 0, 1, 0])
-
-    def test_gap_between_stripes(self):
-        stripes = [stripe(0, 100, 200), stripe(4, 100, 200)]
-        np.testing.assert_array_equal(hsc_mask([150] * 3, [0, 2, 4], stripes),
-                                      [1, 0, 1])
-
-    def test_program_plan_precedence(self):
-        table = Table({'OBJECT': ['a', 'b', 'c', 'd'],
-                       'IN_IBIS': [1, 1, 0, 0],
-                       'RA': [180] * 4, 'DEC': [0] * 4})
-        program, _ = labels(table, {'a', 'c'}, [])
-        np.testing.assert_array_equal(program, ['NAOC', 'LBNL', 'NAOC', ''])
-
-    def test_temporary_northern_extension(self):
-        stripes = [dict(stripe(2.08, 126.60, 249.93), FIELD='NGC-5'),
-                   dict(stripe(-0.72, 128.16, 228.30), FIELD='NGC-6'),
-                   dict(stripe(3.29, 315.57, 44.37), FIELD='SGC-1'),
-                   dict(stripe(0.49, 313.82, 47.15), FIELD='SGC-2')]
-        ra = [180, 180, 127.59, 0, 360, 359, 43.38, 180, 0]
-        dec = [4, 4.001, 3, 6.121, 6.121, 6.122, 5, -1.121, 0.089]
-        original = hsc_mask(ra, dec, stripes)
-        extended = hsc_mask(ra, dec, stripes,
-                            {'NGC-5': 4.0, 'SGC-1': 6.121})
-        np.testing.assert_array_equal(extended, [1, 0, 0, 1, 1, 0, 0, 0, 0])
-        self.assertTrue(np.all(extended >= original))
-        np.testing.assert_array_equal(hsc_mask(ra, dec, stripes), original)
-
-    def test_sgc_limit_uses_only_sgc_ibis_tiles(self):
-        stripes = [dict(stripe(2.08, 126.60, 249.93), FIELD='NGC-5'),
-                   dict(stripe(3.29, 315.57, 44.37), FIELD='SGC-1')]
+class LabelTests(unittest.TestCase):
+    def test_program_plan_precedence_and_sticky_labels(self):
         table = Table({'OBJECT': ['a', 'b', 'c', 'd', 'e'],
-                       'IN_IBIS': [1, 0, 1, 0, 0],
-                       'RA': [0, 0, 180, 0, 180],
-                       'DEC': [6.121, 8.0, 16.0, 6.0, 4.0]})
-        _, mask = labels(table, set(), stripes, extend_hsc_north=True)
-        np.testing.assert_array_equal(mask, [1, 0, 0, 1, 1])
+                       'IN_IBIS': [1, 1, 0, 0, 1],
+                       'PROGRAM': ['', '', '', '', 'LBNL'],
+                       'RA': [180] * 5, 'DEC': [0] * 5})
+        np.testing.assert_array_equal(labels(table, {'a', 'c', 'e'}), ['NAOC', 'LBNL', 'NAOC', '', 'LBNL'])
+        table.remove_column('PROGRAM')
+        np.testing.assert_array_equal(labels(table, {'a', 'c'}), ['NAOC', 'LBNL', 'NAOC', '', 'LBNL'])
+
+    def test_hsc_flags_only_for_in_ibis_rows(self):
+        fp = Footprint(polu_rects=[(100.0, 200.0, 0.0, 4.0)], excluded_rects=[(120.0, 180.0, 1.0, 3.0)],
+                       niji_rects=[(120.0, 180.0, 1.0, 3.0)])
+        table = Table({'OBJECT': list('abcd'), 'IN_IBIS': [1, 1, 0, 1],
+                       'RA': [150, 110, 150, 150], 'DEC': [2.0, 2.0, 2.0, 8.0]})
+        np.testing.assert_array_equal(hsc_flags(table, fp), [1, 0, 0, 1])
 
 
 if __name__ == '__main__':

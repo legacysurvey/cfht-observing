@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Add PROGRAM and IN_HSC to the CFHT ECSV tile catalog.
+"""Update PROGRAM and IN_HSC in the CFHT ECSV tile catalog from the imaging plan.
 
-Requires numpy and astropy. Survey assignments must be supplied explicitly;
-stripe coordinates come from obstatus/desi2-stripes.ecsv.
+Requires numpy and astropy. IN_HSC=1 marks IN_IBIS=1 tiles that CFHT should
+not observe because they are not MegaCam program tiles under footprint.py:
+either their center is more than one degree from POLU+IBIS sky (for
+example the whole of SGC-1, which has HSC-Niji+VST imaging only), or their
+1 x 1 degree field lies entirely inside an HSC-Niji+VST rectangle.
+PROGRAM is NAOC for exact OBJECT matches to target NAME values in plans/,
+otherwise LBNL for IN_IBIS=1 rows; labels already present are kept.
 """
 
 from __future__ import annotations
@@ -15,10 +20,9 @@ import xml.etree.ElementTree as ET
 import numpy as np
 from astropy.table import Table
 
+from footprint import MEGACAM_INSIDE, MEGACAM_OUTER, Footprint
 
 ROOT = Path(__file__).resolve().parent
-HALF_HEIGHT = 1.4
-MARGIN = 1.0
 
 
 def planned_objects(plans: Path) -> set[str]:
@@ -39,72 +43,40 @@ def planned_objects(plans: Path) -> set[str]:
     return names
 
 
-def hsc_mask(ra, dec, stripes, northern_limits=None) -> np.ndarray:
-    """Inset the union of adjoining stripes by one coordinate degree.
-
-    RA margins use coordinate degrees, including at RA=0. Join declination
-    intervals only where the tile's full RA margin fits in every stripe in
-    the run. This retains shared interiors while protecting exposed steps
-    caused by unequal RA limits. Boundaries are inclusive.
-    Optional northern_limits map FIELD names to final, already-inset
-    northern edges; only the named stripes are extended.
-    """
-    ra, dec = np.broadcast_arrays(np.asarray(ra), np.asarray(dec))
-    result = np.zeros(ra.shape, dtype=bool)
-    stripes = sorted(stripes, key=lambda stripe: float(stripe['DEC']))
-    low = np.full(ra.shape, np.inf)
-    high = np.full(ra.shape, -np.inf)
-    for stripe in stripes:
-        width = (float(stripe['RA_MAX']) - float(stripe['RA_MIN'])) % 360
-        offset = (ra - float(stripe['RA_MIN'])) % 360
-        eligible = (offset >= MARGIN) & (offset <= width - MARGIN)
-        next_low = float(stripe['DEC']) - HALF_HEIGHT
-        next_high = float(stripe['DEC']) + HALF_HEIGHT
-        if northern_limits and stripe['FIELD'] in northern_limits:
-            next_high = max(next_high, northern_limits[stripe['FIELD']] + MARGIN)
-        separate = eligible & (next_low > high + 1e-10)
-        result |= separate & (dec >= low + MARGIN - 1e-10) & (
-            dec <= high - MARGIN + 1e-10)
-        low = np.where(separate, next_low, low)
-        high = np.where(eligible, np.maximum(high, next_high), high)
-    result |= (dec >= low + MARGIN - 1e-10) & (dec <= high - MARGIN + 1e-10)
-    return result.astype(np.int16)
+def hsc_flags(table: Table, footprint: Footprint) -> np.ndarray:
+    """IN_HSC: IN_IBIS=1 tiles that are not MegaCam program tiles."""
+    in_ibis = np.asarray(table['IN_IBIS']) == 1
+    program = footprint.program_tiles(table['RA'], table['DEC'], MEGACAM_OUTER, MEGACAM_INSIDE)
+    return (in_ibis & ~program).astype(np.int16)
 
 
-def labels(table: Table, names: set[str], stripes, extend_hsc_north=False):
+def labels(table: Table, names: set[str]) -> np.ndarray:
+    """PROGRAM: keep existing labels; NAOC from plans; LBNL for other IN_IBIS=1 rows."""
     objects = np.char.strip(np.asarray(table['OBJECT'], dtype=str))
     missing = names - set(objects)
     if missing:
         raise ValueError(f'{len(missing)} planned targets absent from tiles')
-    program = np.full(len(table), '', dtype='U4')
-    program[np.asarray(table['IN_IBIS']) == 1] = 'LBNL'
-    program[np.isin(objects, sorted(names))] = 'NAOC'
-    northern_limits = None
-    if extend_hsc_north:
-        if not {'NGC-5', 'SGC-1'} <= {str(s['FIELD']) for s in stripes}:
-            raise ValueError('The northern extension requires NGC-5 and SGC-1')
-        ra = np.asarray(table['RA']) % 360
-        sgc_ibis = ((ra >= 270) | (ra < 90)) & (table['IN_IBIS'] == 1)
-        if not np.any(sgc_ibis):
-            raise ValueError('No SGC IN_IBIS=1 tiles to define the northern edge')
-        northern_limits = {'NGC-5': 4.0,
-                           'SGC-1': float(np.max(table['DEC'][sgc_ibis]))}
-    return program, hsc_mask(table['RA'], table['DEC'], stripes, northern_limits)
+    if 'PROGRAM' in table.colnames:
+        existing = table['PROGRAM']
+        existing = existing.filled('') if hasattr(existing, 'filled') else existing
+        program = np.char.strip(np.asarray(existing, dtype=str)).astype('U4')
+    else:
+        program = np.full(len(table), '', dtype='U4')
+    unlabeled = program == ''
+    program[unlabeled & (np.asarray(table['IN_IBIS']) == 1)] = 'LBNL'
+    program[unlabeled & np.isin(objects, sorted(names))] = 'NAOC'
+    return program
 
 
-def update(root: Path, fields: list[str], extend_hsc_north=False) -> None:
-    stripes = Table.read(root / 'obstatus/desi2-stripes.ecsv')
-    stripes.rename_column('STRIPE', 'FIELD')
-    stripes.rename_column('DEC_CENTER', 'DEC')
-    unknown = set(fields) - set(stripes['FIELD'])
-    if unknown:
-        raise ValueError(f'Unknown stripe names: {sorted(unknown)}')
-    stripes = stripes[np.isin(stripes['FIELD'], fields)]
+def update(root: Path) -> None:
     names = planned_objects(root / 'plans')
+    footprint = Footprint.from_plan(root)
     ecsv_path = root / 'obstatus/cfht-tiles.ecsv'
     ecsv = Table.read(ecsv_path)
     original_columns = [c for c in ecsv.colnames if c not in ('PROGRAM', 'IN_HSC')]
-    program, in_hsc = labels(ecsv, names, stripes, extend_hsc_north)
+    program = labels(ecsv, names)
+    in_hsc = hsc_flags(ecsv, footprint)
+    before = np.asarray(ecsv['IN_HSC']) if 'IN_HSC' in ecsv.colnames else None
     ecsv['PROGRAM'] = program
     ecsv['IN_HSC'] = in_hsc
 
@@ -123,16 +95,13 @@ def update(root: Path, fields: list[str], extend_hsc_north=False) -> None:
     for value in ('NAOC', 'LBNL', ''):
         print(f'PROGRAM={value or "(blank)"}: {np.count_nonzero(program == value)}')
     print(f'IN_HSC=1: {np.count_nonzero(in_hsc)}')
+    if before is not None:
+        print(f'IN_HSC changed 0->1: {np.count_nonzero((before == 0) & (in_hsc == 1))}, '
+              f'1->0: {np.count_nonzero((before == 1) & (in_hsc == 0))}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
-    parser.add_argument('--hsc-stripes', nargs='+', required=True,
-                        help='HSC+VST STRIPE names from desi2-stripes.ecsv')
-    parser.add_argument('--extend-hsc-north', action='store_true',
-                        help='Temporarily extend NGC-5 to DEC=4 and SGC-1 to '
-                             'the northernmost SGC IN_IBIS=1 tile; omit to '
-                             'restore the original stripe footprint')
     args = parser.parse_args()
-    update(args.root, args.hsc_stripes, args.extend_hsc_north)
+    update(args.root)

@@ -1,13 +1,23 @@
 # cfht-observing
 Observing logs for the DESI imaging on CFHT
 
-[`desi2-stripes.ecsv`](desi2-stripes.ecsv) contains
-all 18 stripes from the table captioned Table 2 on page 3 of the September
-9, 2026 imaging-plan draft, including the NGC-9 and SGC-9 extensions. It
-preserves the published coordinates, areas, survey years, assignments, and
-notes, with angular units and source details in the ECSV header. These are
-the document's original bounds, before any CFHT overlap margins or
-temporary HSC extensions. This file is also used by the footprint updater.
+[`desi2-stripes.ecsv`](desi2-stripes.ecsv) contains all 18 stripes of
+Table 1 (`tab:stripes`) of the *DESI Run 2 High-z Imaging Plan*
+(`desi_run2_imaging_plan/sample631.tex`, as of 2026-11-04), including the
+proposed NGC-9 and SGC-9 extensions. It preserves the published coordinates,
+areas, survey years, assignments, and notes, with angular units and source
+details in the ECSV header, and adds `POLU_IBIS`: 1 where CFHT (POLU) and
+DECam (IBIS) image the stripe outside the HSC-Niji+VST rectangles, 0 for
+SGC-1 (HSC-Niji+VST only; it lies largely outside the Rubin footprint) and
+for the extensions, which are not in any tile file yet.
+
+[`footprint-regions.ecsv`](footprint-regions.ecsv) lists the areas inside
+those stripes that CFHT and DECam do not image: the six HSC-Niji+VST
+rectangles of Table 2 (`tab:niji_stripes`; NGC-5/6 at RA 128-226, SGC-1/2
+at RA 330.2-39.7, and the HSC-SSP area south of SGC-2 at RA 28.7-39.7 as
+parts of SGC-3/4) and the two dropped slivers (NGC-5 west of RA 128, NGC-6
+east of RA 226). `footprint.py` turns the two files into a raster of
+POLU+IBIS sky, shared by every camera.
 
 `cfht-tiles.ecsv` is the sole tile catalog. It includes:
 
@@ -25,10 +35,15 @@ temporary HSC extensions. This file is also used by the footprint updater.
   the FITS or XML files in `plans/`; otherwise `LBNL` where `IN_IBIS=1`.
   Other rows have an empty string. Plan membership takes precedence and is
   specific to the named target, including its filter.
-- `IN_HSC`: an int16 flag, set to 1 inside the HSC+VST footprint after a
-  one-degree inset in both RA and declination, plus the temporary northern
-  extensions described below, and 0 elsewhere. It is computed for all tile
-  rows, independently of `PROGRAM`; `IN_IBIS` sets the SGC extension limit.
+- `IN_HSC`: an int16 flag, 1 for `IN_IBIS=1` tiles that CFHT should not
+  observe. A tile is a MegaCam program tile (`IN_IBIS=1, IN_HSC=0`) when its
+  center lies within one degree of POLU+IBIS sky (the same one-degree margin
+  as `IN_IBIS`, so that fields reach the tabulated stripe bounds) unless its
+  1 x 1 degree field lies entirely inside an HSC-Niji+VST rectangle. The whole
+  of SGC-1 is therefore `IN_HSC=1` except where the margin of SGC-2 reaches
+  into it. Despite its name the flag also covers sky nobody images (the
+  SGC-1 ends and the dropped slivers). Recompute with
+  `python update_tile_columns.py`.
 - `LMST_DESIGN`: float64 local mean sidereal time in degrees, in [0, 360),
   balanced uniformly for remaining eligible rows separately in each filter.
   Rows outside `IN_IBIS=1, IN_HSC=0, DONE=0` have NaN.
@@ -36,50 +51,19 @@ temporary HSC extensions. This file is also used by the footprint updater.
   `python update_lmst_design.py` as completion or footprint flags change.
   See [night planning](../docs/night-planning.md) for the algorithm.
 
-The HSC+VST assignments come from the stripe table on page 3 (captioned
-Table 2) of *DESI Run 2 High-Z Imaging Plan*, draft September 9, 2026,
-supplied as `DESI_Run_2_Imaging_Plan.pdf`. The four Niji+VST stripes are:
+`PROGRAM` labels are sticky: `update_tile_columns.py` only labels rows that
+have no label yet (`NAOC` for exact `OBJECT` matches to target `NAME` values
+in the FITS or XML files in `plans/`, otherwise `LBNL` where `IN_IBIS=1`),
+so tiles that enter or leave the program keep their existing label.
 
-| Stripe | DEC center (deg) | RA min (deg) | RA max (deg) |
-| --- | ---: | ---: | ---: |
-| NGC-5 | 2.08 | 126.60 | 249.93 |
-| NGC-6 | -0.72 | 128.16 | 228.30 |
-| SGC-1 | 3.29 | 315.57 | 44.37 |
-| SGC-2 | 0.49 | 313.82 | 47.15 |
-
-Use a stripe half-height of 1.4 degrees about `DEC_CENTER`, rather than the wider
-`DEC_MIN`/`DEC_MAX` bounds in `desi2-stripes.ecsv`. Merge adjoining stripes
-before applying declination insets; shared edges have no inset, while
-exposed steps from unequal RA limits retain the margin. RA ranges wrap
-through 360 degrees in the SGC. Margins are in coordinate degrees, and
-boundary values are included.
-
-In the original footprint, the NGC interior extends from DEC=-1.12 to 2.48 degrees where
-RA is between 129.16 and 227.30 degrees. The wider NGC-5-only portions,
-within RA=127.60 to 248.93 degrees, extend from DEC=1.68 to 2.48 degrees.
-The 2.48-degree northern edge follows the tabulated center of 2.08 degrees.
-
-The current footprint temporarily gives HSC the opportunity to observe
-farther north. NGC-5 extends to DEC=4.0 degrees, retaining its inset RA
-range of 127.60 to 248.93 degrees. SGC-1 extends to the maximum DEC of any
-SGC tile with `IN_IBIS=1` (currently 6.121 degrees), retaining its inset RA
-range of 316.57 through 360 to 43.37 degrees. SGC tiles are identified by
-RA >= 270 or RA < 90 degrees. These are final northern limits, with no
-additional one-degree inset. Southern edges and RA boundaries stay as in
-the original footprint. The extension can include rows with `IN_IBIS=0`.
-
-To regenerate the current extended footprint and program labels from the
-current plans (requires numpy and astropy):
+To regenerate the flags after a change to the plan tables (requires numpy
+and astropy):
 
 ```sh
-python update_tile_columns.py --hsc-stripes NGC-5 NGC-6 SGC-1 SGC-2 --extend-hsc-north
+python update_tile_columns.py
+python update_tile_priorities.py
+python update_lmst_design.py
 python -m unittest -v tests.test_update_tile_columns
-```
-
-To restore the original Table 2 footprint, omit the extension switch:
-
-```sh
-python update_tile_columns.py --hsc-stripes NGC-5 NGC-6 SGC-1 SGC-2
 ```
 
 The tile updaters read and write only `cfht-tiles.ecsv`. Each validates a

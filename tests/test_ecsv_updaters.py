@@ -18,7 +18,7 @@ class EcsvUpdaterTests(unittest.TestCase):
     def test_updates_with_only_ecsv_catalog(self):
         cases = [(update_lmst_design.update, {}, {'LMST_DESIGN'}),
                  (update_tile_priorities.update, {}, {'PRIORITY'}),
-                 (update_tile_columns.update, {'fields': ['NGC-5']}, {'PROGRAM', 'IN_HSC'})]
+                 (update_tile_columns.update, {}, {'PROGRAM', 'IN_HSC'})]
         for update, kwargs, changed_columns in cases:
             with self.subTest(updater=update.__module__), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
@@ -36,8 +36,14 @@ class EcsvUpdaterTests(unittest.TestCase):
                 original.write(path, format='ascii.ecsv')
                 stripes = Table({'STRIPE': ['NGC-5'], 'DEC_CENTER': [2.],
                                  'RA_MIN': [130.], 'RA_MAX': [180.],
-                                 'DEC_MIN': [0.], 'DEC_MAX': [4.], 'YEAR': ['Y1']})
+                                 'DEC_MIN': [-4.], 'DEC_MAX': [7.], 'YEAR': ['Y1']})
                 stripes.write(root / 'obstatus/desi2-stripes.ecsv', format='ascii.ecsv')
+                # The whole of RA 130-180, DEC 1-3 is an HSC-Niji+VST rectangle:
+                # 'planned' (DEC 2) is Niji-only; 'done' (DEC 6) and 'remaining' (DEC -3)
+                # are within a degree of the remaining POLU+IBIS sky.
+                Table({'NAME': ['NGC-5'], 'KIND': ['niji'], 'RA_MIN': [130.], 'RA_MAX': [180.],
+                       'DEC_MIN': [1.], 'DEC_MAX': [3.]}).write(
+                    root / 'obstatus/footprint-regions.ecsv', format='ascii.ecsv')
                 (root / 'plans/existing.xml').write_text(
                     '<ASTRO><CSV headlines="1" colsep="|">NAME|\nplanned|\n</CSV></ASTRO>')
                 with redirect_stdout(io.StringIO()):
@@ -55,8 +61,9 @@ class EcsvUpdaterTests(unittest.TestCase):
                 if 'PRIORITY' in changed_columns:
                     np.testing.assert_array_equal(saved['PRIORITY'], [10., 1., 1., 7.])
                 elif 'PROGRAM' in changed_columns:
+                    # Existing labels are kept; only unlabeled IN_IBIS rows get LBNL/NAOC.
                     np.testing.assert_array_equal(saved['PROGRAM'].filled(''),
-                                                  ['NAOC', 'LBNL', 'LBNL', ''])
+                                                  ['LBNL', 'NAOC', 'LBNL', ''])
                     np.testing.assert_array_equal(saved['IN_HSC'], [1, 0, 0, 0])
                 else:
                     np.testing.assert_array_equal(np.isfinite(saved['LMST_DESIGN']),
