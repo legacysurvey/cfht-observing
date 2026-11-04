@@ -11,7 +11,7 @@ def timedeltatodays(dt):
 
 def datetomjd(d):
     import datetime
-    d0 = datetime.datetime(1858, 11, 17, 0, 0, 0, tzinfo=datetime.UTC)
+    d0 = datetime.datetime(1858, 11, 17, 0, 0, 0, tzinfo=datetime.timezone.utc)
     dt = d - d0
     # dt is a timedelta object.
     return timedeltatodays(dt)

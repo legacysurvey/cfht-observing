@@ -5,8 +5,7 @@ import json
 import os
 import sys
 from astropy.table import Table
-from datetime import UTC
-from datetime import datetime
+from datetime import datetime, timezone
 import numpy as np
 
 from cfht_common import alias_run_ids, baseurl, datetomjd, mjdtodate
@@ -35,10 +34,10 @@ def main():
         yy = int(yy)
         mm = int(mm, 10)
         dd = int(dd, 10)
-        d = datetime(yy, mm, dd, tzinfo=UTC)
+        d = datetime(yy, mm, dd, tzinfo=timezone.utc)
         mjd_min = datetomjd(d) + 1.0
     else:
-        mjd_now = datetomjd(datetime.now(UTC))
+        mjd_now = datetomjd(datetime.now(timezone.utc))
         print('MJD now: %.2f' % mjd_now)
         mjd_min = np.floor(mjd_now - 0.5)
     print('MJD min:', mjd_min)
