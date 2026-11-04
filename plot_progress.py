@@ -26,6 +26,7 @@ DEFAULT_OUTDIR = Path('obstatus')
 DEFAULT_FILTERS = ('M4376', 'M4112')
 COLUMNS = ('OBJECT', 'RA', 'DEC', 'FILTER', 'IN_IBIS', 'IN_HSC', 'DONE', 'PROGRAM', 'DATE')
 PROGRAM_COLORS = {'LBNL': 'tab:blue', 'NAOC': 'tab:orange'}
+QUEUE_COLORS = {'observed': '#1f4e9c', 'pending': '#ff7f0e'}  # dark blue vs orange
 FIELD_SIZE_DEG = 1.0  # drawn size of an observed tile
 
 
@@ -37,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--outdir', type=Path, default=DEFAULT_OUTDIR)
     parser.add_argument('--queue', metavar='PROGRAM',
                         help='Instead of all DONE tiles, show every tile of this PROGRAM (e.g. NAOC): '
-                             'observed ones filled, unobserved ones outlined. Writes progress-PROGRAM.pdf.')
+                             'observed in dark blue, not yet observed in orange. Writes progress-PROGRAM.pdf.')
     args = parser.parse_args()
     args.filters = [name.upper() for name in args.filters]
     if args.queue:
@@ -123,13 +124,13 @@ def main() -> None:
             ax.scatter([], [], marker='s', s=40, c=color, label=label)
         if args.queue:
             queue = footprint & (tiles['PROGRAM'] == args.queue)
-            color = PROGRAM_COLORS.get(args.queue, 'tab:green')
             pending, observed = queue & ~done, queue & done
-            draw_tiles(ax, x_all[pending], tiles['DEC'][pending], 'none', color, alpha=0.9, linewidth=0.5)
-            draw_tiles(ax, x_all[observed], tiles['DEC'][observed], color, 'none', alpha=0.7)
-            ax.scatter([], [], marker='s', s=40, facecolors='none', edgecolors=color,
+            draw_tiles(ax, x_all[pending], tiles['DEC'][pending], QUEUE_COLORS['pending'], 'none', alpha=0.8)
+            draw_tiles(ax, x_all[observed], tiles['DEC'][observed], QUEUE_COLORS['observed'], 'none', alpha=0.9)
+            ax.scatter([], [], marker='s', s=40, c=QUEUE_COLORS['pending'],
                        label=f'{args.queue} not yet observed: {int(pending.sum())} tiles')
-            ax.scatter([], [], marker='s', s=40, c=color, label=f'{args.queue} observed: {int(observed.sum())} tiles')
+            ax.scatter([], [], marker='s', s=40, c=QUEUE_COLORS['observed'],
+                       label=f'{args.queue} observed: {int(observed.sum())} tiles')
             queue_dates = sorted(set(tiles['DATE'][observed]))
             latest = queue_dates[-1] if queue_dates else 'no observations'
             fraction = observed.sum() / queue.sum() if queue.sum() else float('nan')
