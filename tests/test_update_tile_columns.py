@@ -22,19 +22,24 @@ class FootprintTests(unittest.TestCase):
         return self.fp.program_tiles(ra, dec, outer, inside).astype(int).tolist()
 
     def test_outer_margin_at_stripe_edges(self):
-        # Within one degree of the stripe (DEC 0-4) counts; beyond it does not.
-        self.assertEqual(self.program([200] * 4, [-0.9, -1.2, 4.9, 5.2]), [1, 0, 1, 0])
-        self.assertEqual(self.program([129.1, 128.8, 250.9, 251.2], [2] * 4), [1, 0, 1, 0])
+        # The field (half-size 0.5) must overlap the stripe (DEC 0-4): within half a
+        # degree of the edge counts; beyond it does not.
+        self.assertEqual(self.program([200] * 4, [-0.4, -0.7, 4.4, 4.7]), [1, 0, 1, 0])
+        # At RA 130 the POLU sky at DEC 2 is excluded (Niji), so test the RA edge at DEC 0.5.
+        self.assertEqual(self.program([129.6, 129.3, 250.4, 250.7], [0.5, 0.5, 2, 2]), [1, 0, 1, 0])
 
     def test_niji_interior_excluded_but_edges_kept(self):
         # A 1x1 deg field entirely inside the Niji rectangle is excluded; one whose
         # edge reaches POLU sky (within 0.5 deg of the rectangle edge) is kept.
         self.assertEqual(self.program([155] * 4, [2.0, 1.4, 1.6, 2.6]), [0, 1, 0, 1])
-        self.assertEqual(self.program([130.4, 130.6, 179.6, 179.4], [2] * 4), [1, 0, 1, 0])
+        # At the east edge of the rectangle (RA 180) POLU sky continues at the same DEC.
+        self.assertEqual(self.program([179.6, 179.4], [2, 2]), [1, 0])
+        # At the west edge only the dropped sliver lies beyond, so nothing is kept.
+        self.assertEqual(self.program([130.4, 130.6], [2, 2]), [0, 0])
 
     def test_dropped_sliver_is_not_program_sky(self):
-        # Deep in the dropped sliver nothing is near; within a degree of RA 130 the margin applies.
-        self.assertEqual(self.program([126.5, 129.5], [2.0, 2.0]), [0, 1])
+        # Deep in the dropped sliver nothing is near; within half a field of RA 130 the field overlaps.
+        self.assertEqual(self.program([126.5, 129.6], [0.5, 0.5]), [0, 1])
 
     def test_polu_ibis_zero_stripe_contributes_nothing(self):
         fp = Footprint(polu_rects=[], excluded_rects=[], niji_rects=[(0.0, 10.0, 5.0, 8.0)])
@@ -42,7 +47,7 @@ class FootprintTests(unittest.TestCase):
 
     def test_ra_wraparound(self):
         fp = Footprint(polu_rects=[(350.0, 10.0, 0.0, 4.0)], excluded_rects=[], niji_rects=[])
-        self.assertEqual(fp.program_tiles([0, 359, 11.2, 348.8, 9.9], [2] * 5, MEGACAM_OUTER, MEGACAM_INSIDE).astype(int).tolist(), [1, 1, 0, 0, 1])
+        self.assertEqual(fp.program_tiles([0, 359, 10.7, 349.3, 10.3], [2] * 5, MEGACAM_OUTER, MEGACAM_INSIDE).astype(int).tolist(), [1, 1, 0, 0, 1])
 
     def test_decam_box_uses_its_own_size(self):
         # DECam's 2.1 x 1.9 deg field: a tile 0.9 deg inside the Niji edge still reaches POLU

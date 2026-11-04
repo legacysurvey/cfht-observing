@@ -3,9 +3,9 @@
 
 Requires numpy and astropy. IN_HSC=1 marks IN_IBIS=1 tiles that CFHT should
 not observe because they are not MegaCam program tiles under footprint.py:
-either their center is more than one degree from POLU+IBIS sky (for
-example the whole of SGC-1, which has HSC-Niji+VST imaging only), or their
-1 x 1 degree field lies entirely inside an HSC-Niji+VST rectangle.
+their 1 x 1 degree field does not overlap POLU+IBIS sky (for example the
+whole of SGC-1, which has HSC-Niji+VST imaging only) or lies entirely
+inside an HSC-Niji+VST rectangle.
 PROGRAM is NAOC for exact OBJECT matches to target NAME values in plans/,
 otherwise LBNL for program tiles (IN_IBIS=1, IN_HSC=0); labels already
 present are kept, except that tiles outside the program with no exposure

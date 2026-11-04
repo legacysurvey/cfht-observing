@@ -37,11 +37,12 @@ POLU+IBIS sky, shared by every camera.
   specific to the named target, including its filter.
 - `IN_HSC`: an int16 flag, 1 for `IN_IBIS=1` tiles that CFHT should not
   observe. A tile is a MegaCam program tile (`IN_IBIS=1, IN_HSC=0`) when its
-  center lies within one degree of POLU+IBIS sky (the same one-degree margin
-  as `IN_IBIS`, so that fields reach the tabulated stripe bounds) unless its
-  1 x 1 degree field lies entirely inside an HSC-Niji+VST rectangle. The whole
-  of SGC-1 is therefore `IN_HSC=1` except where the margin of SGC-2 reaches
-  into it. Despite its name the flag also covers sky nobody images (the
+  1 x 1 degree field overlaps POLU+IBIS sky (center within half a field of
+  it, the same rule DECam uses with its own field size) and does not lie
+  entirely inside an HSC-Niji+VST rectangle. The whole of SGC-1 is therefore
+  `IN_HSC=1` except where fields at the SGC-2 ends reach into it. `IN_IBIS`
+  keeps its wider one-degree padding, so the outermost ring of `IN_IBIS=1`
+  tiles is `IN_HSC=1` too. Despite its name the flag also covers sky nobody images (the
   SGC-1 ends and the dropped slivers). Recompute with
   `python update_tile_columns.py`.
 - `LMST_DESIGN`: float64 local mean sidereal time in degrees, in [0, 360),

@@ -9,10 +9,11 @@ extensions) contribute nothing.
 
 Membership is decided on a raster (default 0.05-degree cells) so that one
 rule serves any camera: a tile is a program tile when its center lies within
-``outer`` degrees of POLU+IBIS sky (the outer margin that lets footprints
-reach the stripe boundaries) unless a box of half-size ``inside`` centered on
-it lies entirely inside the HSC-Niji+VST rectangles (so nothing is spent on
-sky Niji covers). Both are (RA, DEC) half-sizes in degrees; RA extents are
+``outer`` degrees of POLU+IBIS sky unless a box of half-size ``inside``
+centered on it lies entirely inside the HSC-Niji+VST rectangles (so nothing
+is spent on sky Niji covers). With ``outer`` and ``inside`` both set to the
+camera's half-field, as for MegaCam and DECam, this is exactly "the field
+overlaps POLU+IBIS sky and is not Niji-only". Both are (RA, DEC) half-sizes in degrees; RA extents are
 scaled by 1/cos(DEC). Requires numpy only.
 """
 
@@ -142,7 +143,9 @@ class Footprint:
 
 
 # Camera footprints as (half_ra, half_dec) in degrees.
-MEGACAM_OUTER = (1.0, 1.0)      # outer margin, matching the 1-degree padding of IN_IBIS
-MEGACAM_INSIDE = (0.5, 0.5)     # the ~1 x 1 deg MegaCam field
+# For both cameras the outer margin equals the half-field, so the rule is simply
+# "the field overlaps POLU+IBIS sky and does not lie entirely inside a Niji rectangle".
+MEGACAM_OUTER = (0.5, 0.5)      # the ~1 x 1 deg MegaCam field
+MEGACAM_INSIDE = (0.5, 0.5)
 DECAM_OUTER = (1.05, 0.95)      # the ~2.1 x 1.9 deg DECam field
 DECAM_INSIDE = (1.05, 0.95)
