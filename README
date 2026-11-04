@@ -92,6 +92,13 @@ python make_cfht_targets.py --night 2026-09-09 --program LBNL --dec -90 -12 --no
 python make_cfht_targets.py --night 2026-10-07 --program LBNL --dec -90 -12 --non-overlapping --overwrite
 
 
+Removing targets from Kealahou (deletes their OGs, then the targets; targets
+with exposures cannot be deleted):
+python remove-targets.py --run-id NAOC --dry-run
+python remove-targets.py --run-id NAOC
+The default list is the catalog tiles with that PROGRAM label, IN_HSC=1 and
+DONE=0 (tiles that left the CFHT footprint); names can be given explicitly.
+
 Uploads to Kealahou:
 
 python upload-plan.py --ot-name OT_M4376_IQ0.6 --run-id NAOC plans/targets-2026-09-08-A.fits
