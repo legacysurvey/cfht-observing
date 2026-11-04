@@ -35,9 +35,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--filters', nargs='+', default=list(DEFAULT_FILTERS), metavar='FILTER',
                         help='Filters to plot, one panel each, top to bottom (default: M4376 M4112).')
     parser.add_argument('--outdir', type=Path, default=DEFAULT_OUTDIR)
+    parser.add_argument('--queue', metavar='PROGRAM',
+                        help='Instead of all DONE tiles, show every tile of this PROGRAM (e.g. NAOC): '
+                             'observed ones filled, unobserved ones outlined. Writes progress-PROGRAM.pdf.')
     args = parser.parse_args()
     args.filters = [name.upper() for name in args.filters]
+    if args.queue:
+        args.queue = args.queue.upper()
     return args
+
+
+def draw_tiles(ax, x, dec, facecolor, edgecolor, alpha=0.6, linewidth=0.0):
+    from matplotlib.patches import Rectangle
+    for ra_c, dec_c in zip(x, dec):
+        half_ra = FIELD_SIZE_DEG / 2 / np.cos(np.deg2rad(dec_c))
+        ax.add_patch(Rectangle((ra_c - half_ra, dec_c - FIELD_SIZE_DEG / 2), 2 * half_ra, FIELD_SIZE_DEG,
+                               facecolor=facecolor, edgecolor=edgecolor, alpha=alpha,
+                               linewidth=linewidth))
 
 
 def read_tiles(path: Path) -> dict[str, np.ndarray]:
@@ -95,7 +109,6 @@ def main() -> None:
     import matplotlib
     matplotlib.use('pdf')
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle
 
     # Each panel spans 360 x 50 degrees at equal aspect: ~1.9 in tall at 14 in wide.
     fig, axes = plt.subplots(len(args.filters), 1, figsize=(14, 2.7 * len(args.filters)),
@@ -108,18 +121,30 @@ def main() -> None:
             ax.scatter(x_all[mask], tiles['DEC'][mask], s=4, c=color, marker='s', linewidths=0,
                        rasterized=True)
             ax.scatter([], [], marker='s', s=40, c=color, label=label)
-        for program in sorted(set(tiles['PROGRAM'][done])):
-            sel = done & (tiles['PROGRAM'] == program)
-            color = PROGRAM_COLORS.get(program, 'tab:green')
-            for ra_c, dec_c in zip(x_all[sel], tiles['DEC'][sel]):
-                half_ra = FIELD_SIZE_DEG / 2 / np.cos(np.deg2rad(dec_c))
-                ax.add_patch(Rectangle((ra_c - half_ra, dec_c - FIELD_SIZE_DEG / 2), 2 * half_ra,
-                                       FIELD_SIZE_DEG, facecolor=color, edgecolor='none', alpha=0.6))
-            ax.scatter([], [], marker='s', s=40, c=color, label=f'DONE {program or "(blank)"}: {sel.sum()} tiles')
-        fraction = info['n_done'] / info['n_total']
-        latest = info['dates'][-1] if info['dates'] else 'no observations'
-        ax.set_title(f'{name}: {info["n_done"]} of {info["n_total"]} tiles observed '
-                     f'({100 * fraction:.1f}%) through {latest}', fontsize=10)
+        if args.queue:
+            queue = footprint & (tiles['PROGRAM'] == args.queue)
+            color = PROGRAM_COLORS.get(args.queue, 'tab:green')
+            pending, observed = queue & ~done, queue & done
+            draw_tiles(ax, x_all[pending], tiles['DEC'][pending], 'none', color, alpha=0.9, linewidth=0.5)
+            draw_tiles(ax, x_all[observed], tiles['DEC'][observed], color, 'none', alpha=0.7)
+            ax.scatter([], [], marker='s', s=40, facecolors='none', edgecolors=color,
+                       label=f'{args.queue} not yet observed: {int(pending.sum())} tiles')
+            ax.scatter([], [], marker='s', s=40, c=color, label=f'{args.queue} observed: {int(observed.sum())} tiles')
+            queue_dates = sorted(set(tiles['DATE'][observed]))
+            latest = queue_dates[-1] if queue_dates else 'no observations'
+            fraction = observed.sum() / queue.sum() if queue.sum() else float('nan')
+            ax.set_title(f'{name}: {args.queue} queue, {int(observed.sum())} of {int(queue.sum())} tiles observed '
+                         f'({100 * fraction:.1f}%) through {latest}', fontsize=10)
+        else:
+            for program in sorted(set(tiles['PROGRAM'][done])):
+                sel = done & (tiles['PROGRAM'] == program)
+                color = PROGRAM_COLORS.get(program, 'tab:green')
+                draw_tiles(ax, x_all[sel], tiles['DEC'][sel], color, 'none')
+                ax.scatter([], [], marker='s', s=40, c=color, label=f'DONE {program or "(blank)"}: {sel.sum()} tiles')
+            fraction = info['n_done'] / info['n_total']
+            latest = info['dates'][-1] if info['dates'] else 'no observations'
+            ax.set_title(f'{name}: {info["n_done"]} of {info["n_total"]} tiles observed '
+                         f'({100 * fraction:.1f}%) through {latest}', fontsize=10)
         ax.set_xlim(PLOT_RA_LEFT, PLOT_RA_RIGHT)
         ax.set_ylim(*PLOT_DEC_RANGE)
         ax.set_ylabel('DEC (deg)')
@@ -132,7 +157,7 @@ def main() -> None:
     axes[-1, 0].set_xticklabels([f'{int(t % 360)}' for t in ticks])
     axes[-1, 0].set_xlabel('RA (deg)')
     args.outdir.mkdir(parents=True, exist_ok=True)
-    out = args.outdir / 'progress.pdf'
+    out = args.outdir / (f'progress-{args.queue}.pdf' if args.queue else 'progress.pdf')
     fig.savefig(out, format='pdf', dpi=200, bbox_inches='tight')
     print(f'Wrote: {out}')
 
