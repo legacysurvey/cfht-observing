@@ -32,6 +32,9 @@ python update_lmst_design.py
 python make_cfht_targets.py --night 2026-09-09
 python make_cfht_targets.py --night 2026-09-09 --twilight 18 --exptime 150 --overhead 44 --program LBNL
 
+--stripes restricts candidates to the tabulated RA/DEC bounds of the named
+stripes of obstatus/desi2-stripes.ecsv (e.g. the Year 1 stripes SGC-6 SGC-7
+NGC-7 NGC-8); --names FILE restricts them to listed OBJECT names.
 --night is the Hawaii calendar date of the evening. Defaults are 15-degree
 twilight, 130-second exposures, and 44-second overheads. Outputs include
 evening/morning LMST bounds, FITS/XML queues in time order, a
@@ -91,6 +94,7 @@ Additional targets for NAOC time
 LBNL scheduled nights
 python make_cfht_targets.py --night 2026-09-09 --program LBNL --dec -90 -12 --non-overlapping --overwrite
 python make_cfht_targets.py --night 2026-10-07 --program LBNL --dec -90 -12 --non-overlapping --overwrite
+python make_cfht_targets.py --night 2026-11-06 --program LBNL --filter M4376 --stripes SGC-6 SGC-7 NGC-7 NGC-8 --non-overlapping --overwrite
 
 
 Removing targets from Kealahou (deletes their OGs, then the targets; targets

@@ -110,6 +110,13 @@ def parse_args() -> argparse.Namespace:
         help="Output filename prefix (default: targets-$NIGHT, or targets-$DATE).",
     )
     parser.add_argument(
+        "--stripes",
+        nargs="+",
+        metavar="STRIPE",
+        help="Only consider targets whose centers lie inside the tabulated RA and DEC bounds "
+             "of these stripes (obstatus/desi2-stripes.ecsv), e.g. SGC-6 SGC-7 NGC-7 NGC-8.",
+    )
+    parser.add_argument(
         "--names",
         type=Path,
         metavar="FILE",
@@ -205,6 +212,8 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         parser.error("--min-separation must be positive")
     if not args.filter_name:
         parser.error("--filter must not be empty")
+    if args.stripes:
+        args.stripes = stripe_bounds(args.stripes, parser)
     if args.names is not None:
         if not args.names.is_file():
             parser.error(f"--names file not found: {args.names}")
@@ -243,6 +252,27 @@ def normalize_program(program: str) -> str:
     return program.strip().upper()
 
 
+def stripe_bounds(names: Sequence[str], parser: argparse.ArgumentParser | None = None):
+    """(RA_MIN, RA_MAX, DEC_MIN, DEC_MAX) of the named stripes from desi2-stripes.ecsv."""
+    from footprint import read_ecsv_rows
+    table = {row["STRIPE"]: row for row in read_ecsv_rows(Path(__file__).resolve().parent / "obstatus/desi2-stripes.ecsv")}
+    unknown = sorted(set(names) - set(table))
+    if unknown:
+        message = f"unknown stripes: {', '.join(unknown)}"
+        if parser is not None:
+            parser.error(message)
+        raise ValueError(message)
+    return [(float(table[n]["RA_MIN"]), float(table[n]["RA_MAX"]),
+             float(table[n]["DEC_MIN"]), float(table[n]["DEC_MAX"])) for n in names]
+
+
+def in_stripes(ra_deg: float, dec_deg: float, bounds) -> bool:
+    for ra_min, ra_max, dec_min, dec_max in bounds:
+        if ((ra_deg - ra_min) % 360.0) <= ((ra_max - ra_min) % 360.0) and dec_min <= dec_deg <= dec_max:
+            return True
+    return False
+
+
 def read_names(path: Path) -> set[str]:
     names = set()
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -260,6 +290,7 @@ def iter_matching_targets(
     programs: Sequence[str] | None = ("LBNL",),
     require_lmst: bool = False,
     names: set[str] | None = None,
+    stripes=None,
 ) -> Iterator[TileTarget]:
     """Stream targets from the CFHT ECSV file that match the observing cuts."""
 
@@ -326,6 +357,8 @@ def iter_matching_targets(
             if not in_ra_range(ra_deg, ra_range):
                 continue
             if not in_dec_range(dec_deg, dec_range):
+                continue
+            if stripes and not in_stripes(ra_deg, dec_deg, stripes):
                 continue
 
             try:
@@ -677,6 +710,7 @@ def main() -> None:
             programs=args.programs,
             require_lmst=bool(args.night),
             names=args.names,
+            stripes=args.stripes,
         ),
         key=lambda target: target.ra_deg,
     )
