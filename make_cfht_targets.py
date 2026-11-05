@@ -110,6 +110,13 @@ def parse_args() -> argparse.Namespace:
         help="Output filename prefix (default: targets-$NIGHT, or targets-$DATE).",
     )
     parser.add_argument(
+        "--names",
+        type=Path,
+        metavar="FILE",
+        help="Only consider targets whose OBJECT is listed in FILE (one name per line; "
+             "'#' comments allowed); the other cuts still apply.",
+    )
+    parser.add_argument(
         "--ra",
         nargs=2,
         type=float,
@@ -198,6 +205,12 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         parser.error("--min-separation must be positive")
     if not args.filter_name:
         parser.error("--filter must not be empty")
+    if args.names is not None:
+        if not args.names.is_file():
+            parser.error(f"--names file not found: {args.names}")
+        args.names = read_names(args.names)
+        if not args.names:
+            parser.error("--names file lists no targets")
     if args.avoid_done:
         args.non_overlapping = True
     args.filter_name = args.filter_name.upper()
@@ -230,6 +243,15 @@ def normalize_program(program: str) -> str:
     return program.strip().upper()
 
 
+def read_names(path: Path) -> set[str]:
+    names = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        text = line.split("#", 1)[0].strip()
+        if text:
+            names.add(text.split()[0])
+    return names
+
+
 def iter_matching_targets(
     ecsv_path: Path,
     ra_range: Sequence[float],
@@ -237,6 +259,7 @@ def iter_matching_targets(
     filter_name: str,
     programs: Sequence[str] | None = ("LBNL",),
     require_lmst: bool = False,
+    names: set[str] | None = None,
 ) -> Iterator[TileTarget]:
     """Stream targets from the CFHT ECSV file that match the observing cuts."""
 
@@ -281,6 +304,8 @@ def iter_matching_targets(
             assert column_index is not None
             try:
                 object_name = parts[column_index["OBJECT"]]
+                if names is not None and object_name not in names:
+                    continue
                 ra_deg = float(parts[column_index["RA"]])
                 dec_deg = float(parts[column_index["DEC"]])
                 row_filter = parts[column_index["FILTER"]].upper()
@@ -651,6 +676,7 @@ def main() -> None:
             filter_name=args.filter_name,
             programs=args.programs,
             require_lmst=bool(args.night),
+            names=args.names,
         ),
         key=lambda target: target.ra_deg,
     )
