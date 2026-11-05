@@ -67,9 +67,10 @@ Prints, per filter, the completed fraction of tiles (DONE tiles over IN_IBIS=1,
 IN_HSC=0 tiles plus any DONE tiles inside IN_HSC) and tile counts by program,
 and writes obstatus/progress.pdf with one panel per filter (M4376 above
 M4112; choose others with --filters) in the same sky framing as the nightly plot.
-python plot_progress.py --queue NAOC
-shows every tile of one PROGRAM against the footprint (observed in dark
-blue, not yet observed in orange) and writes obstatus/progress-NAOC.pdf.
+python plot_progress.py --queue NAOC LBNL
+shows every tile of the given PROGRAMs against the footprint, one panel per
+program and filter (observed in dark blue, not yet observed in orange), and
+writes obstatus/progress-NAOC-LBNL.pdf.
 
 Repository layout and tests:
 The executable scripts and shared night_planning.py module live at the repository

@@ -36,13 +36,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--filters', nargs='+', default=list(DEFAULT_FILTERS), metavar='FILTER',
                         help='Filters to plot, one panel each, top to bottom (default: M4376 M4112).')
     parser.add_argument('--outdir', type=Path, default=DEFAULT_OUTDIR)
-    parser.add_argument('--queue', metavar='PROGRAM',
-                        help='Instead of all DONE tiles, show every tile of this PROGRAM (e.g. NAOC): '
-                             'observed in dark blue, not yet observed in orange. Writes progress-PROGRAM.pdf.')
+    parser.add_argument('--queue', metavar='PROGRAM', nargs='+',
+                        help='Instead of all DONE tiles, show every tile of these PROGRAMs (e.g. NAOC LBNL), '
+                             'one panel per program and filter: observed in dark blue, not yet observed '
+                             'in orange. Writes progress-PROGRAM[-PROGRAM].pdf.')
     args = parser.parse_args()
     args.filters = [name.upper() for name in args.filters]
     if args.queue:
-        args.queue = args.queue.upper()
+        args.queue = [name.upper() for name in args.queue]
     return args
 
 
@@ -113,30 +114,32 @@ def main() -> None:
     import matplotlib.pyplot as plt
 
     # Each panel spans 360 x 50 degrees at equal aspect: ~1.9 in tall at 14 in wide.
-    fig, axes = plt.subplots(len(args.filters), 1, figsize=(14, 2.7 * len(args.filters)),
+    panels = [(program, name) for program in (args.queue or [None]) for name in args.filters]
+    fig, axes = plt.subplots(len(panels), 1, figsize=(14, 2.7 * len(panels)),
                              sharex=True, squeeze=False, constrained_layout=True)
     x_all = plot_ra(tiles['RA'])
-    for ax, (name, info) in zip(axes[:, 0], summaries.items()):
+    for ax, (program_name, name) in zip(axes[:, 0], panels):
+        info = summaries[name]
         footprint, hsc, done = info['footprint'], info['hsc'], info['done']
         for mask, color, label in ((footprint & ~hsc, '0.85', f'Footprint: {int((footprint & ~hsc).sum())} tiles'),
                                    (hsc, '#c9d8ea', f'IN_HSC: {int(hsc.sum())} tiles')):
             ax.scatter(x_all[mask], tiles['DEC'][mask], s=4, c=color, marker='s', linewidths=0,
                        rasterized=True)
             ax.scatter([], [], marker='s', s=40, c=color, label=label)
-        if args.queue:
-            queue = footprint & (tiles['PROGRAM'] == args.queue)
+        if program_name:
+            queue = footprint & (tiles['PROGRAM'] == program_name)
             pending, observed = queue & ~done, queue & done
             draw_tiles(ax, x_all[pending], tiles['DEC'][pending], QUEUE_COLORS['pending'], 'none', alpha=0.8)
             draw_tiles(ax, x_all[observed], tiles['DEC'][observed], QUEUE_COLORS['observed'], 'none', alpha=0.9)
             ax.scatter([], [], marker='s', s=40, c=QUEUE_COLORS['pending'],
-                       label=f'{args.queue} not yet observed: {int(pending.sum())} tiles')
+                       label=f'{program_name} not yet observed: {int(pending.sum())} tiles')
             ax.scatter([], [], marker='s', s=40, c=QUEUE_COLORS['observed'],
-                       label=f'{args.queue} observed: {int(observed.sum())} tiles')
+                       label=f'{program_name} observed: {int(observed.sum())} tiles')
             queue_dates = sorted(set(tiles['DATE'][observed]))
-            latest = queue_dates[-1] if queue_dates else 'no observations'
             fraction = observed.sum() / queue.sum() if queue.sum() else float('nan')
-            ax.set_title(f'{name}: {args.queue} queue, {int(observed.sum())} of {int(queue.sum())} tiles observed '
-                         f'({100 * fraction:.1f}%) through {latest}', fontsize=10)
+            when = f'through {queue_dates[-1]}' if queue_dates else '(no observations yet)'
+            ax.set_title(f'{name}: {program_name} queue, {int(observed.sum())} of {int(queue.sum())} tiles observed '
+                         f'({100 * fraction:.1f}%) {when}', fontsize=10)
         else:
             for program in sorted(set(tiles['PROGRAM'][done])):
                 sel = done & (tiles['PROGRAM'] == program)
@@ -159,7 +162,7 @@ def main() -> None:
     axes[-1, 0].set_xticklabels([f'{int(t % 360)}' for t in ticks])
     axes[-1, 0].set_xlabel('RA (deg)')
     args.outdir.mkdir(parents=True, exist_ok=True)
-    out = args.outdir / (f'progress-{args.queue}.pdf' if args.queue else 'progress.pdf')
+    out = args.outdir / (f'progress-{"-".join(args.queue)}.pdf' if args.queue else 'progress.pdf')
     fig.savefig(out, format='pdf', dpi=200, bbox_inches='tight')
     print(f'Wrote: {out}')
 
