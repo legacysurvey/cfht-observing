@@ -8,7 +8,9 @@ regions. Stripes with POLU_IBIS=0 (SGC-1, and the proposed NGC-9/SGC-9
 extensions) contribute nothing.
 
 Membership is decided on a raster (default 0.05-degree cells) so that one
-rule serves any camera: a tile is a program tile when its center lies within
+rule serves any camera: a tile is in the imaged footprint (IN_IBIS=1) when
+its center lies within ``outer`` degrees of POLU+IBIS sky or of an
+HSC-Niji+VST rectangle, and it is a program tile when its center lies within
 ``outer`` degrees of POLU+IBIS sky unless a box of half-size ``inside``
 centered on it lies entirely inside the HSC-Niji+VST rectangles (so nothing
 is spent on sky Niji covers). With ``outer`` and ``inside`` both set to the
@@ -69,6 +71,8 @@ class Footprint:
         self.niji = np.zeros((self.n_dec, self.n_ra), dtype=bool)
         for rect in niji_rects:
             self.niji |= self.rectangle(*rect)
+        # The imaged DESI Run 2 footprint: POLU+IBIS sky plus the HSC-Niji+VST rectangles.
+        self.imaged = self.polu | self.niji
         self._cache = {}
 
     @classmethod
@@ -121,6 +125,14 @@ class Footprint:
         key = ('near', tuple(outer))
         if key not in self._cache:
             self._cache[key] = self.dilate(self.polu, *outer)
+        row, col, outside = self.cell_index(ra, dec)
+        return self._cache[key][row, col] & ~outside
+
+    def in_footprint(self, ra, dec, outer) -> np.ndarray:
+        """Tile centers within ``outer`` (half_ra, half_dec) of the imaged footprint."""
+        key = ('footprint', tuple(outer))
+        if key not in self._cache:
+            self._cache[key] = self.dilate(self.imaged, *outer)
         row, col, outside = self.cell_index(ra, dec)
         return self._cache[key][row, col] & ~outside
 

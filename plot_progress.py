@@ -80,8 +80,8 @@ def filter_summary(tiles: dict[str, np.ndarray], filter_name: str) -> dict:
     in_filter = tiles['FILTER'] == filter_name
     footprint = in_filter & (tiles['IN_IBIS'] == 1)
     hsc = footprint & (tiles['IN_HSC'] == 1)
-    done = footprint & (tiles['DONE'] != 0)
-    responsible = footprint & (~hsc | done)
+    done = in_filter & (tiles['DONE'] != 0)          # every exposure counts, wherever the tile sits now
+    responsible = (footprint & ~hsc) | done
     dates = sorted(set(tiles['DATE'][done]))
     return dict(footprint=footprint, hsc=hsc, done=done, responsible=responsible,
                 n_total=int(responsible.sum()), n_done=int(done.sum()), dates=dates)
@@ -95,8 +95,9 @@ def main() -> None:
         if not info['footprint'].any():
             raise SystemExit(f'No IN_IBIS=1 tiles in filter {name}')
         fraction = info['n_done'] / info['n_total']
+        outside = int((info["done"] & ~(info["footprint"] & ~info["hsc"])).sum())
         print(f'Filter {name}: {info["n_done"]} of {info["n_total"]} tiles observed ({100 * fraction:.1f}%)'
-              f' [IN_IBIS=1 and IN_HSC=0, plus {int((info["done"] & info["hsc"]).sum())} DONE tiles inside IN_HSC;'
+              f' [program tiles IN_IBIS=1 and IN_HSC=0, plus {outside} observed tiles now outside the program;'
               f' {int(info["footprint"].sum())} IN_IBIS tiles in all]')
         for program in sorted(set(tiles['PROGRAM'][info['footprint']])):
             sel = info['footprint'] & (tiles['PROGRAM'] == program)

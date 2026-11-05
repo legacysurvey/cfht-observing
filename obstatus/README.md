@@ -35,16 +35,18 @@ POLU+IBIS sky, shared by every camera.
   the FITS or XML files in `plans/`; otherwise `LBNL` where `IN_IBIS=1`.
   Other rows have an empty string. Plan membership takes precedence and is
   specific to the named target, including its filter.
-- `IN_HSC`: an int16 flag, 1 for `IN_IBIS=1` tiles that CFHT should not
-  observe. A tile is a MegaCam program tile (`IN_IBIS=1, IN_HSC=0`) when its
-  1 x 1 degree field overlaps POLU+IBIS sky (center within half a field of
-  it, the same rule DECam uses with its own field size) and does not lie
-  entirely inside an HSC-Niji+VST rectangle. The whole of SGC-1 is therefore
-  `IN_HSC=1` except where fields at the SGC-2 ends reach into it. `IN_IBIS`
-  keeps its wider one-degree padding, so the outermost ring of `IN_IBIS=1`
-  tiles is `IN_HSC=1` too. Despite its name the flag also covers sky nobody images (the
-  SGC-1 ends and the dropped slivers). Recompute with
+- `IN_IBIS`: an int16 flag, 1 where the tile's 1 x 1 degree field overlaps
+  the imaged DESI Run 2 footprint: POLU+IBIS sky or an HSC-Niji+VST
+  rectangle (`footprint.py`). Tiles beyond the padded stripe bounds, in the
+  dropped slivers, or at the unimaged ends of SGC-1 are 0. Recompute with
   `python update_tile_columns.py`.
+- `IN_HSC`: an int16 flag, 1 for `IN_IBIS=1` tiles whose footprint sky is
+  HSC-Niji+VST's alone, so CFHT does not observe them: the field lies
+  entirely inside a Niji rectangle or overlaps the footprint only through
+  one (the whole of SGC-1, for example). A tile is a MegaCam program tile
+  when `IN_IBIS=1` and `IN_HSC=0`, i.e. its field overlaps POLU+IBIS sky
+  (center within half a field of it, the same rule DECam uses with its own
+  field size) and does not lie entirely inside a Niji rectangle.
 - `LMST_DESIGN`: float64 local mean sidereal time in degrees, in [0, 360),
   balanced uniformly for remaining eligible rows separately in each filter.
   Rows outside `IN_IBIS=1, IN_HSC=0, DONE=0` have NaN.
@@ -72,4 +74,5 @@ python -m unittest -v tests.test_update_tile_columns
 
 The tile updaters read and write only `cfht-tiles.ecsv`. Each validates a
 staged catalog before replacing the original and preserves all columns
-other than those it updates. Observing plans still use FITS and XML.
+other than those it updates (`update_tile_columns.py`: `IN_IBIS`, `IN_HSC`,
+`PROGRAM`). Observing plans still use FITS and XML.

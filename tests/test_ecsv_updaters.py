@@ -18,7 +18,7 @@ class EcsvUpdaterTests(unittest.TestCase):
     def test_updates_with_only_ecsv_catalog(self):
         cases = [(update_lmst_design.update, {}, {'LMST_DESIGN'}),
                  (update_tile_priorities.update, {}, {'PRIORITY'}),
-                 (update_tile_columns.update, {}, {'PROGRAM', 'IN_HSC'})]
+                 (update_tile_columns.update, {}, {'PROGRAM', 'IN_HSC', 'IN_IBIS'})]
         for update, kwargs, changed_columns in cases:
             with self.subTest(updater=update.__module__), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
@@ -66,6 +66,8 @@ class EcsvUpdaterTests(unittest.TestCase):
                     np.testing.assert_array_equal(saved['PROGRAM'].filled(''),
                                                   ['', 'NAOC', 'LBNL', ''])
                     np.testing.assert_array_equal(saved['IN_HSC'], [1, 0, 0, 0])
+                    # 'outside' at DEC 10 is beyond the stripe (DEC -4..7): IN_IBIS=0.
+                    np.testing.assert_array_equal(saved['IN_IBIS'], [1, 1, 1, 0])
                 else:
                     np.testing.assert_array_equal(np.isfinite(saved['LMST_DESIGN']),
                                                   [True, False, True, False])

@@ -6,7 +6,7 @@ import numpy as np
 from astropy.table import Table
 
 from footprint import DECAM_INSIDE, DECAM_OUTER, MEGACAM_INSIDE, MEGACAM_OUTER, Footprint
-from update_tile_columns import hsc_flags, labels
+from update_tile_columns import footprint_flags, hsc_flags, labels
 
 
 class FootprintTests(unittest.TestCase):
@@ -78,6 +78,21 @@ class LabelTests(unittest.TestCase):
         table.remove_column('PROGRAM')
         np.testing.assert_array_equal(labels(table, {'a', 'c'}),
                                       ['NAOC', 'LBNL', '', '', 'LBNL', '', ''])
+
+    def test_footprint_flags(self):
+        # POLU stripe RA 100-200 DEC 0-4 with a Niji rectangle RA 120-180 DEC 1-3.
+        fp = Footprint(polu_rects=[(100.0, 200.0, 0.0, 4.0)], excluded_rects=[(120.0, 180.0, 1.0, 3.0)],
+                       niji_rects=[(120.0, 180.0, 1.0, 3.0)])
+        # a: deep in Niji (IN_IBIS=1, IN_HSC=1); b: POLU (1, 0); c: far outside (0, 0);
+        # d: just outside the stripe edge within half a field (1, 0); e: beyond it (0, 0).
+        table = Table({'OBJECT': list('abcde'), 'RA': [150, 110, 150, 150, 150], 'DEC': [2.0, 2.0, 8.0, 4.4, 4.7]})
+        in_ibis, in_hsc = footprint_flags(table, fp)
+        np.testing.assert_array_equal(in_ibis, [1, 1, 0, 1, 0])
+        np.testing.assert_array_equal(in_hsc, [1, 0, 0, 0, 0])
+        # A Niji-only stripe: in the footprint, HSC only.
+        fp2 = Footprint(polu_rects=[], excluded_rects=[], niji_rects=[(0.0, 10.0, 5.0, 8.0)])
+        in_ibis, in_hsc = footprint_flags(Table({'RA': [5, 5], 'DEC': [6.5, 9.0]}), fp2)
+        np.testing.assert_array_equal(in_ibis, [1, 0]); np.testing.assert_array_equal(in_hsc, [1, 0])
 
     def test_hsc_flags_only_for_in_ibis_rows(self):
         fp = Footprint(polu_rects=[(100.0, 200.0, 0.0, 4.0)], excluded_rects=[(120.0, 180.0, 1.0, 3.0)],
