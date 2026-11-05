@@ -112,7 +112,14 @@ python select-program-tiles.py --stripes SGC-4 SGC-5 --filter M4376 --to NAOC --
 python make_cfht_targets.py --names plans/targets-2026-11-04-SGC45.names --filter M4376 --program NAOC --prefix targets-2026-11-04-SGC45 --overwrite
 python upload-plan.py --ot-name OT_M4376_IQ0.6 --run-id NAOC --no-reset-ogs plans/targets-2026-11-04-SGC45.fits
 
-Uploads to Kealahou:
+Uploads to Kealahou. Observing-template (OT) names are defined per program:
+NAOC (26BZ01) uses OT_M4376_IQ0.6 and OT_M4112_IQ0.6; LBNL (26BZ50) uses
+M4376_0.6 and M4112_0.6 (the upload-plan.py default is M4376_0.6).
+
+LBNL nights:
+python upload-plan.py --ot-name M4376_0.6 --run-id LBNL plans/targets-2026-11-06.fits
+
+NAOC uploads:
 
 python upload-plan.py --ot-name OT_M4376_IQ0.6 --run-id NAOC plans/targets-2026-09-08-A.fits
 python upload-plan.py --ot-name OT_M4376_IQ0.6 --run-id NAOC plans/targets-2026-09-08-B.fits
