@@ -23,7 +23,7 @@ from night_outputs import PLOT_DEC_RANGE, PLOT_RA_LEFT, PLOT_RA_RIGHT, plot_ra
 
 DEFAULT_INPUT = Path('obstatus/cfht-tiles.ecsv')
 DEFAULT_OUTDIR = Path('obstatus')
-DEFAULT_FILTERS = ('M4376', 'M4112')
+DEFAULT_FILTERS = ('M4112', 'M4376')
 COLUMNS = ('OBJECT', 'RA', 'DEC', 'FILTER', 'IN_IBIS', 'IN_HSC', 'DONE', 'PROGRAM', 'DATE')
 PROGRAM_COLORS = {'LBNL': 'tab:blue', 'NAOC': 'tab:orange'}
 QUEUE_COLORS = {'observed': '#1f4e9c', 'pending': '#ff7f0e'}  # dark blue vs orange
@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--input', type=Path, default=DEFAULT_INPUT)
     parser.add_argument('--filters', nargs='+', default=list(DEFAULT_FILTERS), metavar='FILTER',
-                        help='Filters to plot, one panel each, top to bottom (default: M4376 M4112).')
+                        help='Filters to plot, one panel each, top to bottom (default: M4112 M4376).')
     parser.add_argument('--outdir', type=Path, default=DEFAULT_OUTDIR)
     parser.add_argument('--queue', metavar='PROGRAM', nargs='+',
                         help='Instead of all DONE tiles, show every tile of these PROGRAMs (e.g. NAOC LBNL), '

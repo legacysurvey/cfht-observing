@@ -68,8 +68,8 @@ Progress to date (requires numpy and matplotlib):
 python plot_progress.py
 Prints, per filter, the completed fraction of tiles (DONE tiles over IN_IBIS=1,
 IN_HSC=0 tiles plus any DONE tiles inside IN_HSC) and tile counts by program,
-and writes obstatus/progress.pdf with one panel per filter (M4376 above
-M4112; choose others with --filters) in the same sky framing as the nightly plot.
+and writes obstatus/progress.pdf with one panel per filter (M4112 above
+M4376; choose others with --filters) in the same sky framing as the nightly plot.
 python plot_progress.py --queue NAOC LBNL
 shows every tile of the given PROGRAMs against the footprint, one panel per
 program and filter (observed in dark blue, not yet observed in orange), and
