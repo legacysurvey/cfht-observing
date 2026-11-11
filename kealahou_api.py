@@ -57,8 +57,8 @@ class KealahouProgram(object):
         r = requests.put(url, headers=self.headers,
                          data=json.dumps(req_data).encode('utf-8'))
         j = r.json()
-        if not j['success']:
-            raise RuntimeError('Kealahou: failed to update/create OG:', og_data)
+        if not j.get('success'):
+            raise RuntimeError('Kealahou: failed to update/create OG: %s; response: %s' % (og_data, j))
         return j
 
     def create_or_update_target(self, target_data):
@@ -68,8 +68,8 @@ class KealahouProgram(object):
         r = requests.put(url, headers=self.headers,
                          data=json.dumps(req_data).encode('utf-8'))
         j = r.json()
-        if not j['success']:
-            raise RuntimeError('Kealahou: failed to update/create Target:', target_data)
+        if not j.get('success'):
+            raise RuntimeError('Kealahou: failed to update/create Target: %s; response: %s' % (target_data, j))
         return j
 
     def delete_target(self, target_token):
