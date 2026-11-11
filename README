@@ -124,7 +124,10 @@ per filter on the COSMOS field center (10:00:28.6 +02:12:21), named
 COSMOS_<filter>_<n>, stepped 25 arcsec in RA and 100 arcsec in DEC to cover
 the MegaCam gaps; uploaded at HIGH priority with the NAOC templates OT003
 (M4112) and OT002 (M4376):
-python make-dither-targets.py --prefix COSMOS --ra 150.1191667 --dec 2.2058333 --ebv 0.019
+python make-dither-targets.py --prefix COSMOS --ra 150.1191667 --dec 2.2058333 --ebv 0.019 --filters M4112
+python make-dither-targets.py --prefix COSMOS --ra 150.1191667 --dec 2.2058333 --ebv 0.019 --filters M4376 --offsets 37.5 -150 12.5 -50 -12.5 50 -37.5 150
+(Kealahou refuses a second target at the coordinates of an existing one in the
+program, so the M4376 pattern is the mirror image in RA of the M4112 one.)
 python upload-plan.py --run-id NAOC --ot-name OT003 --priority HIGH --no-reset-ogs plans/special/targets-COSMOS-M4112.fits
 python upload-plan.py --run-id NAOC --ot-name OT002 --priority HIGH --no-reset-ogs plans/special/targets-COSMOS-M4376.fits
 end-of-night.py logs exposures of such targets in obstatus/non-survey-exposures.txt.
