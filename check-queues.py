@@ -100,6 +100,7 @@ def main():
         report(f'{p}-multiple-exposures', 'tiles with more than one science exposure here',
                {n for n, v in q['exposures'].items() if n in info and len(v) > 1})
         report(f'{p}-multiple-ogs', 'targets with more than one OG', {n for n, v in q['ogs'].items() if len(v) > 1})
+        report(f'{p}-exposed-nonsurvey', 'targets with exposures that are not survey tiles', {n for n in q['exposures'] if n not in info})
     print('\n=== both programs ===')
     a, b = programs
     report('active-in-both', 'tiles with an active OG in both programs', active[a] & active[b])
