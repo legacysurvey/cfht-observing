@@ -40,12 +40,17 @@ def main():
     parser.add_argument('--dry-run', action='store_true', help='Only report what would be deleted')
     parser.add_argument('--inactive', action='store_true',
                         help='Set the OGs to priority INACTIVE instead of deleting OGs and targets')
+    parser.add_argument('--names-file', help='File of target names, one per line (# comments allowed)')
     parser.add_argument('names', nargs='*', help='Target names; default: catalog tiles with this PROGRAM, IN_HSC=1, DONE=0')
     args = parser.parse_args()
 
     program = args.run_id if args.run_id in alias_run_ids else next(
         (k for k, v in alias_run_ids.items() if v == args.run_id), args.run_id)
-    names = args.names or catalog_targets(args.tile_file, program)
+    names = list(args.names)
+    if args.names_file:
+        with open(args.names_file) as f:
+            names += [line.split('#', 1)[0].split()[0] for line in f if line.split('#', 1)[0].strip()]
+    names = names or catalog_targets(args.tile_file, program)
     print(f'{len(names)} target(s) to remove from {program}:')
     for name in names:
         print('  ', name)
