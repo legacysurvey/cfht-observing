@@ -16,6 +16,8 @@ def main():
     parser.add_argument('--ot-name', default='M4376_0.6', help='Observing Template (OT) name')
     parser.add_argument('--no-reset-ogs', dest='reset_ogs', default=True, action='store_false',
                         help='Do not set all OGs to INACTIVE before starting (the default is to do so)')
+    parser.add_argument('--priority', default='MEDIUM',
+                        help='OG priority for the targets in this plan, e.g. MEDIUM or HIGH (default %(default)s)')
     parser.add_argument('planfile', help='Plan filename (FITS)')
 
     args = parser.parse_args()
@@ -152,7 +154,7 @@ def main():
             ot_token = og_ot[og_token]
         og_data = dict(
             token = og_token,
-            og_priority = 'MEDIUM',
+            og_priority = args.priority,
             target_type = 'OBJECT',
             single_observing_group = dict(
                 observing_block = dict(

@@ -118,6 +118,17 @@ python select-program-tiles.py --stripes SGC-6 SGC-7 --filter M4376 --to NAOC --
 python make_cfht_targets.py --names plans/targets-2026-11-11-SGC67.names --filter M4376 --program NAOC --prefix targets-2026-11-11-SGC67 --overwrite
 python upload-plan.py --ot-name OT_M4376_IQ0.6 --run-id NAOC --no-reset-ogs plans/targets-2026-11-11-SGC67.fits
 
+Targets outside the survey tiling (not in cfht-tiles.ecsv; plans in
+plans/special/, which the tile updaters do not read). Four dithered pointings
+per filter on the COSMOS field center (10:00:28.6 +02:12:21), named
+COSMOS_<filter>_<n>, stepped 25 arcsec in RA and 100 arcsec in DEC to cover
+the MegaCam gaps; uploaded at HIGH priority with the NAOC templates OT003
+(M4112) and OT002 (M4376):
+python make-dither-targets.py --prefix COSMOS --ra 150.1191667 --dec 2.2058333 --ebv 0.019
+python upload-plan.py --run-id NAOC --ot-name OT003 --priority HIGH --no-reset-ogs plans/special/targets-COSMOS-M4112.fits
+python upload-plan.py --run-id NAOC --ot-name OT002 --priority HIGH --no-reset-ogs plans/special/targets-COSMOS-M4376.fits
+end-of-night.py logs exposures of such targets in obstatus/non-survey-exposures.txt.
+
 Uploads to Kealahou. Observing-template (OT) names are defined per program:
 NAOC (26BZ01) uses OT_M4376_IQ0.6 and OT_M4112_IQ0.6; LBNL (26BZ50) uses
 M4376_0.6 and M4112_0.6 (the upload-plan.py default is M4376_0.6).

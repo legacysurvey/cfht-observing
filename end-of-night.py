@@ -67,7 +67,10 @@ def main():
         date = mjdtodate(mjd - MJD_DATE_OFFSET)
         dd = date.date()
         yymmdd = dd.strftime('%Y-%m-%d')
-        target_data = exp['target_data']
+        target_data = exp.get('target_data')
+        if not target_data:
+            print('  No target attached; skipping')
+            continue
         target_name = target_data['name']
         target_token = target_data['token']
         og_data = exp['observing_group_context']
@@ -102,6 +105,10 @@ def main():
     # Update tile file - mark these target names as DONE=1
     obj_to_tileindex = dict([(n,i) for i,n in enumerate(tiles['OBJECT'])])
     for target_name, target_token, og_token, ot_token, expnum, yymmdd, exptime in keep_exposures:
+        if target_name not in obj_to_tileindex:
+            # Not a survey tile (e.g. the COSMOS dither targets of make-dither-targets.py).
+            record_non_survey_exposure(target_name, expnum, yymmdd, exptime)
+            continue
         ind = obj_to_tileindex[target_name]
         old_done = tiles['DONE'][ind]
         tiles['DONE'][ind] = 1
@@ -122,6 +129,20 @@ def main():
                   'EXPNUM', old_expnum, 'vs current', expnum, 'DATE', old_date, 'vs current', yymmdd)
     tiles.write(args.tile_file, overwrite=True)
     print('Wrote updated tile file')
+
+def record_non_survey_exposure(target_name, expnum, yymmdd, exptime,
+                               filename='obstatus/non-survey-exposures.txt'):
+    '''Log an exposure of a target that is not in the tile file.'''
+    header = '# TARGET EXPNUM DATE EXPTIME\n'
+    lines = open(filename).readlines() if os.path.exists(filename) else [header]
+    if any(line.split()[1:2] == [str(expnum)] for line in lines if not line.startswith('#')):
+        print('Non-survey target', target_name, 'exposure', expnum, 'already recorded')
+        return
+    lines.append('%s %i %s %.3f\n' % (target_name, expnum, yymmdd, exptime))
+    with open(filename, 'w') as f:
+        f.writelines(lines)
+    print('Recorded non-survey target', target_name, 'exposure', expnum, 'in', filename)
+
 
 if __name__ == '__main__':
     sys.exit(main())
