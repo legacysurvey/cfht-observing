@@ -77,6 +77,37 @@ def read_tiles(path: Path) -> dict[str, np.ndarray]:
     return out
 
 
+SPECIAL_DIR = Path('plans/special')
+SPECIAL_COLOR = '#d62ad6'
+
+
+def read_special_targets(directory: Path = SPECIAL_DIR, log: Path = Path('obstatus/non-survey-exposures.txt')):
+    """Non-survey targets (make-dither-targets.py): name, RA, DEC, filter, program, observed.
+
+    Names are PREFIX_FILTER_N; the program of each prefix comes from
+    programs.txt in the directory, and observed status from the log that
+    end-of-night.py keeps for targets outside the tile file.
+    """
+    from astropy.table import Table
+    programs = {}
+    if (directory / 'programs.txt').exists():
+        for line in (directory / 'programs.txt').read_text().splitlines():
+            parts = line.split('#', 1)[0].split()
+            if len(parts) >= 2:
+                programs[parts[0]] = parts[1].upper()
+    observed = set()
+    if log.exists():
+        observed = {line.split()[0] for line in log.read_text().splitlines() if line.strip() and not line.startswith('#')}
+    targets = []
+    for path in sorted(directory.glob('*.fits')):
+        for row in Table.read(path):
+            name = str(row['NAME']).strip()
+            prefix, filter_name = name.split('_')[0], name.split('_')[1].upper()
+            targets.append(dict(name=name, prefix=prefix, ra=float(row['RA']), dec=float(row['DEC']),
+                                filter=filter_name, program=programs.get(prefix, ''), observed=name in observed))
+    return targets
+
+
 def filter_summary(tiles: dict[str, np.ndarray], filter_name: str) -> dict:
     in_filter = tiles['FILTER'] == filter_name
     footprint = in_filter & (tiles['IN_IBIS'] == 1)
@@ -114,6 +145,7 @@ def main() -> None:
     import matplotlib.pyplot as plt
 
     # Each panel spans 360 x 50 degrees at equal aspect: ~1.9 in tall at 14 in wide.
+    special = read_special_targets()
     panels = [(program, name) for program in (args.queue or [None]) for name in args.filters]
     fig, axes = plt.subplots(len(panels), 1, figsize=(14, 2.7 * len(panels)),
                              sharex=True, squeeze=False, constrained_layout=True)
@@ -150,13 +182,29 @@ def main() -> None:
             latest = info['dates'][-1] if info['dates'] else 'no observations'
             ax.set_title(f'{name}: {info["n_done"]} of {info["n_total"]} tiles observed '
                          f'({100 * fraction:.1f}%) through {latest}', fontsize=10)
+        # Special (non-survey) targets of this filter, and of this program in queue mode.
+        mine = [sp for sp in special if sp['filter'] == name and (program_name is None or sp['program'] == program_name)]
+        for prefix in sorted({sp['prefix'] for sp in mine}):
+            group = [sp for sp in mine if sp['prefix'] == prefix]
+            for sp in group:
+                x = float(plot_ra(sp['ra'])); half_ra = FIELD_SIZE_DEG / 2 / np.cos(np.deg2rad(sp['dec']))
+                ax.add_patch(plt.Rectangle((x - half_ra, sp['dec'] - FIELD_SIZE_DEG / 2), 2 * half_ra, FIELD_SIZE_DEG,
+                                           facecolor=SPECIAL_COLOR if sp['observed'] else 'none',
+                                           edgecolor=SPECIAL_COLOR, linewidth=1.0, alpha=0.9, zorder=6))
+            xc = float(plot_ra(np.mean([sp['ra'] for sp in group]))); yc = float(np.mean([sp['dec'] for sp in group]))
+            ax.annotate(prefix, (xc, yc), xytext=(0, 9), textcoords='offset points', ha='center', fontsize=7,
+                        color=SPECIAL_COLOR, zorder=7)
+            n_obs = sum(sp['observed'] for sp in group)
+            ax.scatter([], [], marker='s', s=40, facecolors='none', edgecolors=SPECIAL_COLOR,
+                       label=f'{prefix} (not a survey tile): {n_obs} of {len(group)} observed')
+            print(f'{name}{" " + program_name if program_name else ""}: special targets {prefix}: {n_obs} of {len(group)} observed')
         ax.set_xlim(PLOT_RA_LEFT, PLOT_RA_RIGHT)
         ax.set_ylim(*PLOT_DEC_RANGE)
         ax.set_ylabel('DEC (deg)')
         ax.set_aspect('equal')
         ax.grid(True, linewidth=0.3, alpha=0.5)
         # The strip above DEC +20 is empty in every filter, so the legend fits inside the axes.
-        ax.legend(loc='upper center', ncol=4, fontsize=7, framealpha=0.9, borderpad=0.3)
+        ax.legend(loc='upper center', ncol=5, fontsize=7, framealpha=0.9, borderpad=0.3)
     ticks = np.arange(PLOT_RA_LEFT, PLOT_RA_RIGHT - 1, -30.0)
     axes[-1, 0].set_xticks(ticks)
     axes[-1, 0].set_xticklabels([f'{int(t % 360)}' for t in ticks])

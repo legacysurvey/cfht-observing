@@ -1,0 +1,2 @@
+# Kealahou program of each set of special (non-survey) targets in this directory: PREFIX PROGRAM
+COSMOS NAOC
