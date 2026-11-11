@@ -7,11 +7,14 @@ label but are no longer CFHT program tiles (IN_HSC=1) and have no exposure
 referencing the target are deleted first, then the target itself. Targets
 with exposures cannot be deleted by Kealahou (database integrity), which is
 the intended safeguard. Use --dry-run to list what would be removed.
+With --inactive nothing is deleted: the OGs are set to priority INACTIVE
+instead, for targets that Kealahou refuses to delete.
 
 Example:
     python remove-targets.py --run-id NAOC --dry-run
     python remove-targets.py --run-id NAOC
     python remove-targets.py --run-id NAOC DESI_M4376_259028 DESI_M4376_259188
+    python remove-targets.py --run-id NAOC --inactive DESI_M4376_253234
 """
 import argparse
 import sys
@@ -35,6 +38,8 @@ def main():
     parser.add_argument('--run-id', default='NAOC', help='NAOC (26BZ01), LBNL (26BZ50), or an ID; default NAOC')
     parser.add_argument('--tile-file', default='obstatus/cfht-tiles.ecsv')
     parser.add_argument('--dry-run', action='store_true', help='Only report what would be deleted')
+    parser.add_argument('--inactive', action='store_true',
+                        help='Set the OGs to priority INACTIVE instead of deleting OGs and targets')
     parser.add_argument('names', nargs='*', help='Target names; default: catalog tiles with this PROGRAM, IN_HSC=1, DONE=0')
     args = parser.parse_args()
 
@@ -70,11 +75,27 @@ def main():
             continue
         for og in ogs_by_target.get(token, []):
             print(f'{name}: OG {og.get("label", "?")} ({og["token"]}, priority {og["og_priority"]})')
+            if args.inactive:
+                if og['og_priority'] == 'INACTIVE':
+                    print('   already INACTIVE')
+                elif not args.dry_run:
+                    og['og_priority'] = 'INACTIVE'
+                    try:
+                        kealahou.create_or_update_og(og)
+                        print('   set INACTIVE')
+                    except RuntimeError as exc:
+                        print('   could not set INACTIVE:', str(exc)[:200])
+                        failed.append((name, 'OG', og['token']))
+                continue
             if not args.dry_run:
                 j = kealahou.delete_og(og['token'])
                 print('   delete OG ->', j)
                 if 'error' in j:
                     failed.append((name, 'OG', og['token']))
+        if args.inactive:
+            if not args.dry_run and not any(f[0] == name for f in failed):
+                removed.append(name)
+            continue
         print(f'{name}: target token {token}')
         if not args.dry_run:
             j = kealahou.delete_target(token)
@@ -83,7 +104,7 @@ def main():
                 failed.append((name, 'target', token))
             else:
                 removed.append(name)
-    print(f'{len(removed)} removed, {len(missing)} not present, {len(failed)} failed'
+    print(f'{len(removed)} {"set INACTIVE" if args.inactive else "removed"}, {len(missing)} not present, {len(failed)} failed'
           + (' (dry run: nothing deleted)' if args.dry_run else ''))
     for item in failed:
         print('  failed:', item)
