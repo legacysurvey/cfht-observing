@@ -97,6 +97,15 @@ python make_cfht_targets.py --night 2026-10-07 --program LBNL --dec -90 -12 --no
 python make_cfht_targets.py --night 2026-11-06 --program LBNL --filter M4376 --stripes SGC-6 SGC-7 NGC-7 NGC-8 --non-overlapping --overwrite
 
 
+Which exposures count: only science exposures that CFHT has VALIDATED
+(exp_status in Kealahou). "MEGACAM SNR SNAP" snapshots never count, and an
+exposure that is graded but not validated (typically grade 3 or 5) leaves its
+tile unobserved and its OG active so that the queue repeats it. end-of-night.py
+applies this for the requested night and also catches up validated exposures
+from other nights that the tile file lacks (validated late, or taken after
+that night's update was run). dump-exposures.py saves a program's exposure
+records to queue-check/ for offline analysis.
+
 Cross-check of both Kealahou queues against the tile catalog (read-only;
 run it after moving tiles between programs or changing the footprint):
 python check-queues.py --write queue-check

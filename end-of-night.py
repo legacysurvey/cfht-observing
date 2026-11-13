@@ -50,18 +50,40 @@ def main():
     # This magic 1.0 is because the MJD is UTC, and we want the sunset date in Hawaii time.
     MJD_DATE_OFFSET = 1.0
 
+    obj_to_tileindex = dict([(str(n).strip(),i) for i,n in enumerate(tiles['OBJECT'])])
     keep_exposures = []
+    not_validated = []
+    n_catchup = 0
     exposures_mjd_max = 0.
     for exp in exposures:
         st = exp['exposure_status']
         mjd = st['exp_date_mjd']
         exposures_mjd_max = max(exposures_mjd_max, mjd)
-        if mjd < mjd_min or mjd > mjd_max:
-            continue
         expnum = int(exp['obsid'])
-        print('Exposure number', expnum, ': MJD %.2f,' % mjd, 'Hawaii time:', st['read_obs_date_hst'])
+        if mjd < mjd_min or mjd > mjd_max:
+            # Catch-up: a validated exposure from another night that the tile file does
+            # not have yet (validated late, or taken after that night's update was run).
+            name = (exp.get('target_data') or {}).get('name')
+            if (st['obs_comment'] == 'MEGACAM SNR SNAP' or st.get('exp_status') != 'VALIDATED'
+                or name not in obj_to_tileindex):
+                continue
+            ind = obj_to_tileindex[name]
+            if tiles['DONE'][ind] != 0 and tiles['EXPNUM'][ind] >= expnum:
+                continue
+            n_catchup += 1
+            print('Catch-up: exposure', expnum, 'of', name, 'from', st['read_obs_date_hst'],
+                  'is validated but not in the tile file')
+        else:
+            print('Exposure number', expnum, ': MJD %.2f,' % mjd, 'Hawaii time:', st['read_obs_date_hst'])
         if st['obs_comment'] == 'MEGACAM SNR SNAP':
             print('  SNR SNAP')
+            continue
+        # Only exposures that CFHT has validated count. A graded-but-not-validated
+        # exposure (typically grade 3 or 5) leaves the tile unobserved and its OG
+        # active, so that the queue repeats it.
+        if st.get('exp_status') != 'VALIDATED':
+            print('  Not validated (status %s, grade %s): not counted' % (st.get('exp_status'), st.get('grade')))
+            not_validated.append((expnum, st.get('exp_status'), st.get('grade')))
             continue
         exptime = st['exposure_time']['exposure_time_ms'] * 0.001
         date = mjdtodate(mjd - MJD_DATE_OFFSET)
@@ -76,17 +98,23 @@ def main():
         og_data = exp['observing_group_context']
         og_token = og_data['observing_group_token']
         og_label = og_data['observing_group_label']
+        og_active = og_data.get('observing_group_priority') != 'INACTIVE'
         ot_data = exp['observing_template']
         ot_token = ot_data['token']
         print('  Target "%s"' % target_name, 'OG', og_label, '= token', og_token)
-        keep_exposures.append((target_name, target_token, og_token, ot_token, expnum, yymmdd, exptime))
-    print('Keeping', len(keep_exposures), 'from the night')
+        keep_exposures.append((target_name, target_token, og_token, ot_token, expnum, yymmdd, exptime, og_active))
+    print('Keeping', len(keep_exposures) - n_catchup, 'validated exposures from the night and',
+          n_catchup, 'caught up from other nights;', len(not_validated), 'from the night not validated and not counted')
+    if any(status != 'GRADED' for _, status, _ in not_validated):
+        print('Some exposures are not graded yet; a later run (for any night) will pick them up once validated.')
     if len(keep_exposures) == 0:
         print('Latest exposure seen: MJD %.2f, date %s' % (exposures_mjd_max, mjdtodate(exposures_mjd_max - MJD_DATE_OFFSET).strftime('%Y-%m-%d')))
         return -1
 
     # Mark OGs as priority=INACTIVE
-    for target_name, target_token, og_token, ot_token, expnum, yymmdd, exptime in keep_exposures:
+    for target_name, target_token, og_token, ot_token, expnum, yymmdd, exptime, og_active in keep_exposures:
+        if not og_active:
+            continue
         og_data = dict(
             token = og_token,
             og_priority = 'INACTIVE',
@@ -103,8 +131,7 @@ def main():
         print('OG update successful for OG labelled', label, 'target', target_name)
 
     # Update tile file - mark these target names as DONE=1
-    obj_to_tileindex = dict([(n,i) for i,n in enumerate(tiles['OBJECT'])])
-    for target_name, target_token, og_token, ot_token, expnum, yymmdd, exptime in keep_exposures:
+    for target_name, target_token, og_token, ot_token, expnum, yymmdd, exptime, og_active in keep_exposures:
         if target_name not in obj_to_tileindex:
             # Not a survey tile (e.g. the COSMOS dither targets of make-dither-targets.py).
             record_non_survey_exposure(target_name, expnum, yymmdd, exptime)
