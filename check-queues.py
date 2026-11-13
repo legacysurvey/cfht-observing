@@ -29,8 +29,23 @@ from kealahou_api import KealahouProgram
 SNAP_COMMENT = 'MEGACAM SNR SNAP'
 
 
-def load_program(program, token=None):
-    k = KealahouProgram(program, token=token)
+class DumpedProgram(object):
+    """Stand-in for KealahouProgram that reads the files written by dump-exposures.py."""
+    def __init__(self, program, directory):
+        self.program, self.directory = program, directory
+
+    def _read(self, kind):
+        import json
+        with open(os.path.join(self.directory, '%s-%s.json' % (kind, self.program))) as f:
+            return json.load(f)
+
+    def fetch_targets(self): return self._read('targets')
+    def fetch_ogs(self): return self._read('ogs')
+    def fetch_exposures(self): return self._read('exposures')
+
+
+def load_program(program, token=None, dump=None):
+    k = DumpedProgram(program, dump) if dump else KealahouProgram(program, token=token)
     targets = k.fetch_targets()
     token_to_name = {t['token']: t['name'] for t in targets}
     og_state = defaultdict(list)          # target name -> [(og token, priority)]
@@ -61,6 +76,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--token', help='Kealahou API token; default is $KEALAHOU_TOKEN')
     parser.add_argument('--tile-file', default='obstatus/cfht-tiles.ecsv')
+    parser.add_argument('--from-dump', metavar='DIR',
+                        help='Read the files saved by dump-exposures.py instead of querying Kealahou')
     parser.add_argument('--write', metavar='DIR', help='Write the name lists of each finding into DIR')
     args = parser.parse_args()
 
@@ -72,7 +89,7 @@ def main():
 
     programs = list(alias_run_ids)        # NAOC, LBNL
     try:
-        queue = {p: load_program(p, args.token) for p in programs}
+        queue = {p: load_program(p, args.token, args.from_dump) for p in programs}
     except RuntimeError:
         return -1
     findings = {}
