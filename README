@@ -119,6 +119,13 @@ It reports active OGs whose tile belongs to the other program, lies outside
 the footprint or is already DONE, tiles active in both queues, exposures that
 end-of-night.py missed, and unobserved tiles with no active OG.
 
+Updating targets already in Kealahou (upload-plan.py skips existing targets):
+python update-targets.py --run-id NAOC --names-file plans/special/naoc-august-unobserved.names
+sets the requested magnitude of the named unobserved tiles to the survey depth
+for their extinction (observed tiles are left alone); --ot-name NAME also
+switches their OGs to that template. The August 2026 NAOC upload used a flat
+MAG_AB of 24.25, which is kept for the tiles observed with it.
+
 Removing targets from Kealahou (deletes their OGs, then the targets; targets
 with exposures cannot be deleted):
 python remove-targets.py --run-id NAOC --dry-run
