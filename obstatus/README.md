@@ -47,6 +47,11 @@ POLU+IBIS sky, shared by every camera.
   when `IN_IBIS=1` and `IN_HSC=0`, i.e. its field overlaps POLU+IBIS sky
   (center within half a field of it, the same rule DECam uses with its own
   field size) and does not lie entirely inside a Niji rectangle.
+- `DONE`, `DATE`, `EXPNUM`, `EXPTIME`, `SNR`: the observation that counts for
+  the tile, set by `end-of-night.py`. An exposure counts when it is good
+  (graded by CFHT, not grade 5, Elixir SNR > 4.2 = SNR goal 4.6 minus 0.4) or
+  when CFHT validated it at lower SNR; the highest-SNR such exposure is
+  recorded. `SNR <= 4.2` on a `DONE` tile marks one to be topped up later.
 - `LMST_DESIGN`: float64 local mean sidereal time in degrees, in [0, 360),
   balanced uniformly for remaining eligible rows separately in each filter.
   Rows outside `IN_IBIS=1, IN_HSC=0, DONE=0` have NaN.

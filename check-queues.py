@@ -23,7 +23,7 @@ from collections import Counter, defaultdict
 import numpy as np
 from astropy.table import Table
 
-from cfht_common import alias_run_ids
+from cfht_common import alias_run_ids, exposure_quality
 from kealahou_api import KealahouProgram
 
 SNAP_COMMENT = 'MEGACAM SNR SNAP'
@@ -48,8 +48,9 @@ def load_program(program, token=None):
         status = e.get('exposure_status') or {}
         if name is None or status.get('obs_comment') == SNAP_COMMENT:
             continue
-        # Snapshots never count, and only validated exposures make a tile observed.
-        if status.get('exp_status') != 'VALIDATED':
+        # Snapshots never count; an exposure counts when it is good (SNR above the
+        # minimum and not marked bad) or validated by CFHT (cfht_common.exposure_quality).
+        if exposure_quality(status)[0] is None:
             unvalidated[name].append(int(e.get('obsid') or 0))
             continue
         exposures[name].append(int(e.get('obsid') or 0))
@@ -88,8 +89,8 @@ def main():
         other = [x for x in programs if x != p][0]
         prio = Counter(pr for ogs in q['ogs'].values() for _, pr in ogs)
         print(f'\n=== {p} ({alias_run_ids[p]}): {len(q["targets"])} targets, {sum(prio.values())} OGs {dict(prio)}, '
-              f'{sum(len(v) for v in q["exposures"].values())} validated science exposures on {len(q["exposures"])} targets, '
-              f'{sum(len(v) for v in q["unvalidated"].values())} not validated ===')
+              f'{sum(len(v) for v in q["exposures"].values())} counted science exposures on {len(q["exposures"])} targets, '
+              f'{sum(len(v) for v in q["unvalidated"].values())} not counted ===')
         survey = {n for n in active[p] if n in info}
         report(f'{p}-active-nonsurvey', 'active OGs of targets that are not survey tiles (expected for COSMOS)', active[p] - survey)
         report(f'{p}-active-labelled-{other}', f'active OGs whose tile is labelled {other}', {n for n in survey if info[n][0] == other})
@@ -99,13 +100,13 @@ def main():
         mine = {n for n, (l, d, inprog) in info.items() if l == p and not d and inprog}
         report(f'{p}-unobserved-not-active', f'unobserved {p} tiles with no active OG in {p}'
                + (' (expected: most LBNL tiles are not loaded)' if p == 'LBNL' else ''), mine - active[p])
-        report(f'{p}-unvalidated-only-not-active', 'unobserved tiles here whose only exposures were not validated and whose OG is not active (will not be repeated)',
+        report(f'{p}-unvalidated-only-not-active', 'unobserved tiles here whose exposures do not count and whose OG is not active (will not be repeated)',
                {n for n in q['unvalidated'] if n in info and not info[n][1] and info[n][2] and n not in active[p]})
-        report(f'{p}-exposed-not-done', 'tiles with a validated exposure here but DONE=0 in the catalog (missed by end-of-night)',
+        report(f'{p}-exposed-not-done', 'tiles with a counted exposure here but DONE=0 in the catalog (missed by end-of-night)',
                {n for n in q['exposures'] if n in info and not info[n][1]})
         report(f'{p}-exposed-labelled-{other}', f'tiles exposed here but labelled {other}',
                {n for n in q['exposures'] if n in info and info[n][0] == other})
-        report(f'{p}-multiple-exposures', 'tiles with more than one validated science exposure here',
+        report(f'{p}-multiple-exposures', 'tiles with more than one counted science exposure here',
                {n for n, v in q['exposures'].items() if n in info and len(v) > 1})
         report(f'{p}-multiple-ogs', 'targets with more than one OG', {n for n, v in q['ogs'].items() if len(v) > 1})
         report(f'{p}-exposed-nonsurvey', 'targets with exposures that are not survey tiles', {n for n in q['exposures'] if n not in info})
@@ -114,7 +115,7 @@ def main():
     report('active-in-both', 'tiles with an active OG in both programs', active[a] & active[b])
     report('target-in-both', 'tiles loaded as targets in both programs', (queue[a]['targets'] & queue[b]['targets']) & set(info))
     exposed = set(queue[a]['exposures']) | set(queue[b]['exposures'])
-    report('done-without-exposure', 'DONE tiles with no validated science exposure in either program', {n for n, (l, d, i) in info.items() if d and n not in exposed})
+    report('done-without-exposure', 'DONE tiles with no counted science exposure in either program', {n for n, (l, d, i) in info.items() if d and n not in exposed})
     report('exposed-in-both', 'tiles with exposures in both programs', set(queue[a]['exposures']) & set(queue[b]['exposures']) & set(info))
     if args.write:
         os.makedirs(args.write, exist_ok=True)
